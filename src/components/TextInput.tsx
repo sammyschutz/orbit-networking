@@ -6,12 +6,10 @@ import {
 } from "@constants/theme";
 import React, { useState } from "react";
 import {
-    NativeSyntheticEvent,
     Pressable,
     TextInput as RNTextInput,
     StyleSheet,
     Text,
-    TextInputFocusEventData,
     View,
     ViewStyle,
 } from "react-native";
@@ -21,7 +19,7 @@ interface TextInputProps {
   placeholder?: string;
   value: string;
   onChangeText: (text: string) => void;
-  onBlur?: (e: NativeSyntheticEvent<TextInputFocusEventData>) => void;
+  onBlur?: () => void;
   error?: string;
   helper?: string;
   keyboardType?: "default" | "email-address" | "numeric" | "phone-pad";
@@ -102,9 +100,9 @@ export const TextInput: React.FC<TextInputProps> = ({
           value={value}
           onChangeText={onChangeText}
           onFocus={() => setIsFocused(true)}
-          onBlur={(e) => {
+          onBlur={() => {
             setIsFocused(false);
-            onBlur?.(e);
+            onBlur?.();
           }}
           keyboardType={keyboardType}
           autoCapitalize={autoCapitalize}

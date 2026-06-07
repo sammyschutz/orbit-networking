@@ -9,11 +9,13 @@ import {
   Pressable,
   ActivityIndicator,
   RefreshControl,
+  Image,
 } from 'react-native';
 import { useThemeColors, typography, spacing, createStyles } from '@constants/theme';
 import { ConnectionCard } from '@components/Card';
 import { useAppStore } from '@store/appStore';
 import { supabase, Connection, Profile } from '@services/supabase';
+import { useRouter } from 'expo-router';
 
 interface ConnectionWithProfile extends Connection {
   profile?: Profile;
@@ -27,6 +29,7 @@ interface ConnectionWithProfile extends Connection {
 export const ConnectionsList: React.FC = () => {
   const colors = useThemeColors();
   const styles = createStyles(colors);
+  const router = useRouter();
 
   const { connections, connectionsLoading, fetchConnections, currentProfile } = useAppStore();
   const [connectionsWithProfiles, setConnectionsWithProfiles] = useState<ConnectionWithProfile[]>([]);
@@ -43,31 +46,45 @@ export const ConnectionsList: React.FC = () => {
   const loadConnections = async () => {
     setLoading(true);
     try {
-      await fetchConnections();
+      const freshConnections = await fetchConnections();
       
-      // For each connection, fetch the other user's profile
-      if (connections.length > 0 && currentProfile?.user_id) {
-        const connectionsData = await Promise.all(
-          connections.map(async (conn) => {
-            const otherUserId = conn.user_a_id === currentProfile.user_id
-              ? conn.user_b_id
-              : conn.user_a_id;
-
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('user_id', otherUserId)
-              .single();
-
-            return {
-              ...conn,
-              profile: profile as Profile,
-            };
-          })
-        );
-
-        setConnectionsWithProfiles(connectionsData);
+      if (!freshConnections.length || !currentProfile?.user_id) {
+        setConnectionsWithProfiles([]);
+        return;
       }
+
+      const otherUserIds = freshConnections.map((conn) =>
+        conn.user_a_id === currentProfile.user_id
+          ? conn.user_b_id
+          : conn.user_a_id,
+      );
+
+      const { data: profiles, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .in('user_id', otherUserIds);
+
+      if (error) throw error;
+
+      const profilesByUserId = new Map(
+        ((profiles as Profile[]) ?? []).map((profile) => [
+          profile.user_id,
+          profile,
+        ]),
+      );
+
+      const connectionsData = freshConnections.map((conn) => {
+        const otherUserId = conn.user_a_id === currentProfile.user_id
+          ? conn.user_b_id
+          : conn.user_a_id;
+
+        return {
+          ...conn,
+          profile: profilesByUserId.get(otherUserId),
+        };
+      });
+
+      setConnectionsWithProfiles(connectionsData);
     } catch (err) {
       console.error('Failed to load connections:', err);
     } finally {
@@ -88,7 +105,7 @@ export const ConnectionsList: React.FC = () => {
     const date = new Date(dateString);
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - date.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
     if (diffDays === 0) return 'Today';
     if (diffDays === 1) return 'Yesterday';
@@ -98,12 +115,19 @@ export const ConnectionsList: React.FC = () => {
   };
 
   const handleConnectionPress = (connection: ConnectionWithProfile) => {
-    // Navigate to profile detail screen
-    // Implementation depends on navigation setup
-    console.log('View profile:', connection.profile?.display_name);
+    router.push({
+      pathname: '/connection/[id]',
+      params: { id: connection.id },
+    });
   };
 
-  if (loading && !connections.length) {
+  const isNewConnection = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    return now.getTime() - date.getTime() < 7 * 24 * 60 * 60 * 1000;
+  };
+
+  if ((loading || connectionsLoading) && !connectionsWithProfiles.length) {
     return (
       <SafeAreaView style={[styles.screen, { backgroundColor: colors.surfaceBg }]}>
         <View style={localStyles.centerContent}>
@@ -189,6 +213,7 @@ export const ConnectionsList: React.FC = () => {
                 title={item.profile?.role_title ?? ''}
                 industry={item.profile?.industry ?? ''}
                 matchedDate={`Matched ${formatMatchDate(item.created_at)}`}
+                isNew={isNewConnection(item.created_at)}
                 testID={`connection-${item.id}`}
               />
             </Pressable>
@@ -220,6 +245,7 @@ interface ConnectionDetailProps {
 export const ConnectionDetail: React.FC<ConnectionDetailProps> = ({ connectionId, onClose }) => {
   const colors = useThemeColors();
   const styles = createStyles(colors);
+  const { currentProfile } = useAppStore();
 
   const [connection, setConnection] = useState<ConnectionWithProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -235,7 +261,14 @@ export const ConnectionDetail: React.FC<ConnectionDetailProps> = ({ connectionId
 
         if (data) {
           const conn = data as Connection;
-          const otherUserId = conn.user_a_id; // Simplified; would need current user context
+          if (!currentProfile?.user_id) {
+            setConnection(conn);
+            return;
+          }
+
+          const otherUserId = conn.user_a_id === currentProfile.user_id
+            ? conn.user_b_id
+            : conn.user_a_id;
 
           const { data: profile } = await supabase
             .from('profiles')
@@ -256,7 +289,7 @@ export const ConnectionDetail: React.FC<ConnectionDetailProps> = ({ connectionId
     };
 
     loadConnection();
-  }, [connectionId]);
+  }, [connectionId, currentProfile?.user_id]);
 
   if (loading) {
     return (
@@ -288,13 +321,24 @@ export const ConnectionDetail: React.FC<ConnectionDetailProps> = ({ connectionId
         {/* Close button would be in header navigation */}
         <View style={localStyles.profileDetail}>
           {/* Profile image */}
-          {profile.photo_url && (
+          {profile.photo_url ? (
+            <Image
+              source={{ uri: profile.photo_url }}
+              style={localStyles.profileImage}
+              resizeMode="cover"
+            />
+          ) : (
             <View
               style={[
-                localStyles.profileImageContainer,
+                localStyles.profileImage,
+                localStyles.profileImagePlaceholder,
                 { backgroundColor: colors.surfaceCard },
               ]}
-            />
+            >
+              <Text style={[typography.headline, { color: colors.textSecondary }]}>
+                {profile.display_name.charAt(0).toUpperCase()}
+              </Text>
+            </View>
           )}
 
           {/* Profile info */}
@@ -439,11 +483,15 @@ const localStyles = StyleSheet.create({
   profileDetail: {
     paddingVertical: spacing.xl,
   },
-  profileImageContainer: {
+  profileImage: {
     width: '100%',
     height: 300,
     borderRadius: 16,
     marginBottom: spacing.lg,
+  },
+  profileImagePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   promptItem: {
     marginBottom: spacing.xl,

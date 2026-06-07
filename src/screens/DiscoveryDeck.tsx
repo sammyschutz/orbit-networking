@@ -1,5 +1,5 @@
-import { Button } from "@components/Button";
 import { ProfileCard } from "@components/Card";
+import { NotificationsBanner } from "@components/NotificationsBanner";
 import {
     createStyles,
     spacing,
@@ -7,17 +7,17 @@ import {
     typography,
     useThemeColors,
 } from "@constants/theme";
-import { supabase } from "@services/supabase";
+import { Feather } from "@expo/vector-icons";
 import { useAppStore } from "@store/appStore";
 import React, { useEffect, useRef, useState } from "react";
 import {
     Animated,
     Dimensions,
     PanResponder,
+    Pressable,
     SafeAreaView,
     StyleSheet,
     Text,
-    useColorScheme,
     View,
 } from "react-native";
 
@@ -40,12 +40,13 @@ export const DiscoverySwipeDeck: React.FC<SwipeDeckProps> = ({
 }) => {
   const colors = useThemeColors();
   const styles = createStyles(colors);
-  const scheme = useColorScheme();
 
-  const { candidates, fetchCandidates, currentProfile } = useAppStore();
+  const { candidates, fetchCandidates, currentProfile, submitSwipe } =
+    useAppStore();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [swiping, setSwiping] = useState(false);
+  const [matchMessage, setMatchMessage] = useState<string | null>(null);
 
   const pan = useRef(new Animated.ValueXY()).current;
   const scale = useRef(new Animated.Value(1)).current;
@@ -55,8 +56,8 @@ export const DiscoverySwipeDeck: React.FC<SwipeDeckProps> = ({
   // Initialize pan responder for swipe gestures
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: () => !swiping,
+      onMoveShouldSetPanResponder: () => !swiping,
 
       onPanResponderMove: (_, { dx, dy }) => {
         pan.x.setValue(dx);
@@ -64,7 +65,7 @@ export const DiscoverySwipeDeck: React.FC<SwipeDeckProps> = ({
 
         // Subtle rotate based on swipe direction
         const rotation = (dx / SCREEN_WIDTH) * 15;
-        rotate.x.setValue(rotation);
+        rotate.setValue(rotation);
 
         // Scale slightly on drag
         const dragScale = 1 - Math.abs(dx) / (SCREEN_WIDTH * 2);
@@ -85,7 +86,7 @@ export const DiscoverySwipeDeck: React.FC<SwipeDeckProps> = ({
               duration: timing.snap,
               useNativeDriver: false,
             }),
-            Animated.timing(rotate.x, {
+            Animated.timing(rotate, {
               toValue: direction === "like" ? 20 : -20,
               duration: timing.snap,
               useNativeDriver: false,
@@ -105,7 +106,7 @@ export const DiscoverySwipeDeck: React.FC<SwipeDeckProps> = ({
               toValue: { x: 0, y: 0 },
               useNativeDriver: false,
             }),
-            Animated.timing(rotate.x, {
+            Animated.timing(rotate, {
               toValue: 0,
               duration: timing.transition,
               useNativeDriver: false,
@@ -125,95 +126,50 @@ export const DiscoverySwipeDeck: React.FC<SwipeDeckProps> = ({
   useEffect(() => {
     if (!candidates.length && currentProfile?.user_id) {
       setLoading(true);
-      fetchCandidates().finally(() => setLoading(false));
+      fetchCandidates().finally(() => {
+        setCurrentIndex(0);
+        setLoading(false);
+      });
     }
-  }, [currentProfile?.user_id, candidates.length]);
+  }, [currentProfile?.user_id, candidates.length, fetchCandidates]);
 
-  // Preload next cards
-  useEffect(() => {
-    if (
-      candidates.length - currentIndex < 5 &&
-      !loading &&
-      candidates.length > 0
-    ) {
-      // Trigger fetch for more candidates
-      fetchCandidates();
-    }
-  }, [currentIndex, candidates.length, loading]);
+  const resetCardAnimation = () => {
+    pan.setValue({ x: 0, y: 0 });
+    scale.setValue(1);
+    rotate.setValue(0);
+    opacity.setValue(1);
+  };
 
   const handleSwipe = async (direction: "like" | "pass") => {
     const candidate = candidates[currentIndex];
-    if (!candidate || !currentProfile?.user_id) return;
+    if (!candidate || !currentProfile?.user_id || swiping) return;
 
     setSwiping(true);
 
     try {
-      // Create swipe record
-      const { error } = await supabase.from("swipes").insert({
-        from_user_id: currentProfile.user_id,
-        to_user_id: candidate.user_id,
-        direction,
-      });
+      const result = await submitSwipe(candidate.user_id, direction);
 
-      if (error) throw error;
-
-      // Handle like: create incoming_interest notification for target user
-      if (direction === "like") {
-        // Check for reciprocal like (connection)
-        const { data: reciprocal } = await supabase
-          .from("swipes")
-          .select("id")
-          .eq("from_user_id", candidate.user_id)
-          .eq("to_user_id", currentProfile.user_id)
-          .eq("direction", "like")
-          .single();
-
-        if (reciprocal) {
-          // Match! Create connection
-          await supabase.from("connections").insert({
-            user_a_id: currentProfile.user_id,
-            user_b_id: candidate.user_id,
-            status: "connected",
-          });
-
-          // Create match notifications for both users
-          await Promise.all([
-            supabase.from("notifications").insert({
-              user_id: currentProfile.user_id,
-              type: "match",
-              source_user_id: candidate.user_id,
-              payload: { connection_id: candidate.id },
-            }),
-            supabase.from("notifications").insert({
-              user_id: candidate.user_id,
-              type: "match",
-              source_user_id: currentProfile.user_id,
-              payload: { connection_id: candidate.id },
-            }),
-          ]);
-
-          console.log("🎉 Match found!");
-        } else {
-          // One-way like: create incoming_interest notification for target user
-          await supabase.from("notifications").insert({
-            user_id: candidate.user_id,
-            type: "incoming_interest",
-            source_user_id: currentProfile.user_id,
-          });
-        }
+      if (result?.is_match) {
+        setMatchMessage(`You and ${candidate.display_name} are connected.`);
+        setTimeout(() => setMatchMessage(null), 3200);
       }
 
-      // Move to next card
-      setCurrentIndex(currentIndex + 1);
-
-      // Reset animations
-      pan.setValue({ x: 0, y: 0 });
-      scale.setValue(1);
-      rotate.x.setValue(0);
-      opacity.setValue(1);
+      const nextIndex = currentIndex + 1;
+      if (nextIndex >= candidates.length) {
+        setLoading(true);
+        const refreshed = await fetchCandidates();
+        setCurrentIndex(0);
+        if (!refreshed.length) {
+          onNoMoreCards?.();
+        }
+      } else {
+        setCurrentIndex(nextIndex);
+      }
     } catch (err) {
       console.error("Swipe failed:", err);
     } finally {
+      resetCardAnimation();
+      setLoading(false);
       setSwiping(false);
     }
   };
@@ -267,6 +223,8 @@ export const DiscoverySwipeDeck: React.FC<SwipeDeckProps> = ({
       style={[styles.screen, { backgroundColor: colors.surfaceBg }]}
     >
       <View style={styles.container}>
+        <NotificationsBanner />
+
         {/* Header */}
         <View style={localStyles.header}>
           <Text style={[typography.title, { color: colors.textPrimary }]}>
@@ -304,6 +262,7 @@ export const DiscoverySwipeDeck: React.FC<SwipeDeckProps> = ({
                   industry={nextCandidate.industry}
                   bio={nextCandidate.bio}
                   prompt={nextCandidate.ask_me_about}
+                  style={localStyles.cardFill}
                 />
               </View>
             );
@@ -320,7 +279,7 @@ export const DiscoverySwipeDeck: React.FC<SwipeDeckProps> = ({
                   { translateY: pan.y },
                   { scale },
                   {
-                    rotateZ: rotate.x.interpolate({
+                    rotateZ: rotate.interpolate({
                       inputRange: [-20, 0, 20],
                       outputRange: ["-20deg", "0deg", "20deg"],
                     }),
@@ -338,23 +297,43 @@ export const DiscoverySwipeDeck: React.FC<SwipeDeckProps> = ({
               industry={currentCandidate.industry}
               bio={currentCandidate.bio}
               prompt={currentCandidate.ask_me_about}
+              style={localStyles.cardFill}
             />
           </Animated.View>
         </View>
 
+        {matchMessage && (
+          <View
+            style={[
+              localStyles.matchToast,
+              {
+                backgroundColor: colors.success,
+              },
+            ]}
+            accessibilityRole="alert"
+          >
+            <Feather name="zap" size={16} color="#FFFFFF" />
+            <Text style={[typography.label, localStyles.matchToastText]}>
+              {matchMessage}
+            </Text>
+          </View>
+        )}
+
         {/* Action buttons */}
         <View style={localStyles.actions}>
-          <Button
-            title="Pass"
-            variant="secondary"
+          <SwipeActionButton
+            label="Pass"
+            icon="x"
+            color={colors.error}
+            disabled={!currentCandidate || swiping}
             onPress={() => handleSwipe("pass")}
-            disabled={!currentCandidate || swiping}
           />
-          <Button
-            title="Like"
-            variant="secondary"
-            onPress={() => handleSwipe("like")}
+          <SwipeActionButton
+            label="Like"
+            icon="heart"
+            color={colors.success}
             disabled={!currentCandidate || swiping}
+            onPress={() => handleSwipe("like")}
           />
         </View>
 
@@ -378,6 +357,42 @@ export const DiscoverySwipeDeck: React.FC<SwipeDeckProps> = ({
   );
 };
 
+interface SwipeActionButtonProps {
+  label: string;
+  icon: keyof typeof Feather.glyphMap;
+  color: string;
+  disabled: boolean;
+  onPress: () => void;
+}
+
+const SwipeActionButton: React.FC<SwipeActionButtonProps> = ({
+  label,
+  icon,
+  color,
+  disabled,
+  onPress,
+}) => {
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        localStyles.actionButton,
+        {
+          borderColor: color,
+          opacity: disabled ? 0.45 : pressed ? 0.8 : 1,
+          transform: [{ scale: pressed && !disabled ? 0.97 : 1 }],
+        },
+      ]}
+    >
+      <Feather name={icon} size={20} color={color} />
+      <Text style={[typography.label, { color }]}>{label}</Text>
+    </Pressable>
+  );
+};
+
 const localStyles = StyleSheet.create({
   centerContent: {
     flex: 1,
@@ -386,7 +401,7 @@ const localStyles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   header: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
   },
   deckContainer: {
     flex: 1,
@@ -400,12 +415,43 @@ const localStyles = StyleSheet.create({
     height: "70%",
     maxHeight: 600,
   },
+  cardFill: {
+    height: "100%",
+  },
   activeCard: {
     zIndex: 100,
+  },
+  matchToast: {
+    alignItems: "center",
+    borderRadius: 16,
+    flexDirection: "row",
+    gap: spacing.sm,
+    justifyContent: "center",
+    marginTop: spacing.md,
+    minHeight: 44,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  matchToastText: {
+    color: "#FFFFFF",
+    flex: 1,
   },
   actions: {
     flexDirection: "row",
     gap: spacing.md,
     paddingTop: spacing.lg,
+  },
+  actionButton: {
+    alignItems: "center",
+    backgroundColor: "transparent",
+    borderRadius: 16,
+    borderWidth: 1,
+    flex: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    justifyContent: "center",
+    minHeight: 48,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
   },
 });

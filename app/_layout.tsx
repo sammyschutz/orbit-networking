@@ -13,7 +13,7 @@ export default function RootLayout() {
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
   });
 
-  const { fetchCurrentProfile } = useAppStore();
+  const { fetchCurrentProfile, fetchNotifications } = useAppStore();
 
   useEffect(() => {
     if (!loaded) return;
@@ -29,6 +29,7 @@ export default function RootLayout() {
       if (!profile?.is_complete) {
         router.replace("/onboarding");
       } else {
+        await fetchNotifications();
         router.replace("/(tabs)");
       }
     };
@@ -46,7 +47,7 @@ export default function RootLayout() {
     });
 
     return () => subscription.unsubscribe();
-  }, [loaded, fetchCurrentProfile]);
+  }, [loaded, fetchCurrentProfile, fetchNotifications]);
 
   if (!loaded) return null;
 
@@ -55,6 +56,12 @@ export default function RootLayout() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="auth" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+      <Stack.Screen name="profile" options={{ title: "Edit profile" }} />
+      <Stack.Screen name="connection/[id]" options={{ title: "Connection" }} />
+      <Stack.Screen
+        name="public-profile/[userId]"
+        options={{ title: "Profile" }}
+      />
       <Stack.Screen name="+not-found" />
     </Stack>
   );

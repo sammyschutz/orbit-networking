@@ -2,6 +2,7 @@ import {
     Connection,
     Notification,
     Profile,
+    SwipeResult,
     supabase,
 } from "@services/supabase";
 import { create } from "zustand";
@@ -27,9 +28,13 @@ interface AppState {
   // Actions
   fetchCurrentProfile: (userId: string) => Promise<Profile | null>;
   updateProfile: (updates: Partial<Profile>) => Promise<void>;
-  fetchCandidates: () => Promise<void>;
-  fetchConnections: () => Promise<void>;
-  fetchNotifications: () => Promise<void>;
+  fetchCandidates: () => Promise<Profile[]>;
+  submitSwipe: (
+    toUserId: string,
+    direction: "like" | "pass",
+  ) => Promise<SwipeResult | null>;
+  fetchConnections: () => Promise<Connection[]>;
+  fetchNotifications: () => Promise<Notification[]>;
   markNotificationRead: (notificationId: string) => Promise<void>;
   clearError: () => void;
 }
@@ -125,7 +130,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Fetch discovery candidates (profiles not swiped on)
   fetchCandidates: async () => {
     const { currentProfile } = get();
-    if (!currentProfile?.user_id) return;
+    if (!currentProfile?.user_id) return [];
 
     set({ candidatesLoading: true });
     try {
@@ -167,18 +172,45 @@ export const useAppStore = create<AppState>((set, get) => ({
         .limit(20);
 
       if (error) throw error;
-      set({ candidates: (data as Profile[]) ?? [] });
+      const candidates = (data as Profile[]) ?? [];
+      set({ candidates });
+      return candidates;
     } catch (err) {
       console.error("Failed to fetch candidates:", err);
+      return [];
     } finally {
       set({ candidatesLoading: false });
     }
   },
 
+  // Submit a swipe via the server-side RPC so RLS can keep connections and
+  // notifications locked down from direct client inserts.
+  submitSwipe: async (toUserId, direction) => {
+    const { data, error } = await supabase.rpc("submit_swipe", {
+      p_to_user_id: toUserId,
+      p_direction: direction,
+    });
+
+    if (error) {
+      console.error("Swipe failed:", error);
+      throw error;
+    }
+
+    const result = Array.isArray(data) ? data[0] : data;
+    const swipeResult = (result as SwipeResult | undefined) ?? null;
+
+    await get().fetchNotifications();
+    if (swipeResult?.is_match) {
+      await get().fetchConnections();
+    }
+
+    return swipeResult;
+  },
+
   // Fetch user's connections
   fetchConnections: async () => {
     const { currentProfile } = get();
-    if (!currentProfile?.user_id) return;
+    if (!currentProfile?.user_id) return [];
 
     set({ connectionsLoading: true });
     try {
@@ -191,9 +223,12 @@ export const useAppStore = create<AppState>((set, get) => ({
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      set({ connections: (data as Connection[]) ?? [] });
+      const connections = (data as Connection[]) ?? [];
+      set({ connections });
+      return connections;
     } catch (err) {
       console.error("Failed to fetch connections:", err);
+      return [];
     } finally {
       set({ connectionsLoading: false });
     }
@@ -202,7 +237,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Fetch user's notifications
   fetchNotifications: async () => {
     const { currentProfile } = get();
-    if (!currentProfile?.user_id) return;
+    if (!currentProfile?.user_id) return [];
 
     try {
       const { data, error } = await supabase
@@ -215,8 +250,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       const notifications = (data as Notification[]) ?? [];
       const unreadCount = notifications.filter((n) => !n.read_at).length;
       set({ notifications, unreadCount });
+      return notifications;
     } catch (err) {
       console.error("Failed to fetch notifications:", err);
+      return [];
     }
   },
 

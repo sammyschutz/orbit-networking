@@ -58,10 +58,10 @@ export interface Profile {
   experience_level: "student" | "early" | "mid" | "senior" | "founder";
   bio: string;
   photo_url: string;
-  timezone?: string;
-  ask_me_about?: string;
-  learning_about?: string;
-  side_project?: string;
+  timezone?: string | null;
+  ask_me_about?: string | null;
+  learning_about?: string | null;
+  side_project?: string | null;
   is_complete: boolean;
   created_at: string;
   updated_at: string;
@@ -73,6 +73,13 @@ export interface Swipe {
   to_user_id: string;
   direction: "like" | "pass";
   created_at: string;
+}
+
+export interface SwipeResult {
+  swipe_id: string;
+  is_match: boolean;
+  connection_id: string | null;
+  notification_id: string | null;
 }
 
 export interface Connection {

@@ -49,7 +49,7 @@ export const darkColors = {
   scrim: 'rgba(0, 0, 0, 0.6)',
 } as const;
 
-export type ColorScheme = typeof lightColors;
+export type ColorScheme = Record<keyof typeof lightColors, string>;
 
 /**
  * Hook to get current theme colors based on system preference

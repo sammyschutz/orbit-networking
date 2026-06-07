@@ -3,6 +3,7 @@ import {
   View,
   StyleSheet,
   ViewStyle,
+  StyleProp,
   Image,
   Text,
 } from 'react-native';
@@ -10,7 +11,7 @@ import { useThemeColors, elevation, spacing, borderRadius, typography } from '@c
 
 interface CardProps {
   children?: React.ReactNode;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   testID?: string;
 }
 
@@ -44,7 +45,7 @@ interface ProfileCardProps {
   industry: string;
   bio?: string;
   prompt?: string;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   testID?: string;
 }
 
@@ -159,6 +160,7 @@ interface ConnectionCardProps {
   title: string;
   industry: string;
   matchedDate?: string;
+  isNew?: boolean;
   onPress?: () => void;
   testID?: string;
 }
@@ -173,6 +175,7 @@ export const ConnectionCard: React.FC<ConnectionCardProps> = ({
   title,
   industry,
   matchedDate,
+  isNew = false,
   testID,
 }) => {
   const colors = useThemeColors();
@@ -189,26 +192,50 @@ export const ConnectionCard: React.FC<ConnectionCardProps> = ({
       testID={testID}
     >
       <View style={styles.connectionContent}>
-        {image && (
+        {image ? (
           <Image
             source={{ uri: image }}
             style={styles.connectionImage}
             testID={`${testID}:image`}
           />
+        ) : (
+          <View
+            style={[
+              styles.connectionImage,
+              styles.connectionImagePlaceholder,
+              { backgroundColor: colors.surfaceInput },
+            ]}
+          >
+            <Text style={[typography.title, { color: colors.textSecondary }]}>
+              {name.charAt(0).toUpperCase()}
+            </Text>
+          </View>
         )}
 
         <View style={styles.connectionInfo}>
-          <Text
-            style={[
-              styles.connectionName,
-              {
-                color: colors.textPrimary,
-              },
-            ]}
-            numberOfLines={1}
-          >
-            {name}
-          </Text>
+          <View style={styles.connectionNameRow}>
+            <Text
+              style={[
+                styles.connectionName,
+                {
+                  color: colors.textPrimary,
+                },
+              ]}
+              numberOfLines={1}
+            >
+              {name}
+            </Text>
+            {isNew && (
+              <View
+                style={[
+                  styles.newBadge,
+                  { backgroundColor: colors.success },
+                ]}
+              >
+                <Text style={styles.newBadgeText}>New</Text>
+              </View>
+            )}
+          </View>
 
           <Text
             style={[
@@ -259,7 +286,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   profileCard: {
-    height: '70%',
+    height: '100%',
     maxHeight: 600,
   },
   profileImage: {
@@ -312,12 +339,32 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     marginRight: spacing.lg,
   },
+  connectionImagePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   connectionInfo: {
     flex: 1,
   },
+  connectionNameRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
   connectionName: {
     ...typography.label,
-    marginBottom: spacing.xs,
+    flex: 1,
+  },
+  newBadge: {
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+  },
+  newBadgeText: {
+    ...typography.caption,
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   connectionTitle: {
     ...typography.caption,

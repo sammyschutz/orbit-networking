@@ -2,12 +2,14 @@ import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
 import { Feather } from "@expo/vector-icons";
 import { useAuth } from "@hooks/useAuth";
+import { useAppStore } from "@store/appStore";
 import { Tabs } from "expo-router";
 import { Button } from "react-native";
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const { signOut } = useAuth();
+  const unreadCount = useAppStore((state) => state.unreadCount);
 
   return (
     <Tabs
@@ -30,6 +32,7 @@ export default function TabLayout() {
         name="connections"
         options={{
           title: "Connections",
+          tabBarBadge: unreadCount || undefined,
           tabBarIcon: ({ color }) => (
             <Feather name="users" size={24} color={color} />
           ),
