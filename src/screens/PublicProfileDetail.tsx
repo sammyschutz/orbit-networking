@@ -1,17 +1,20 @@
 import { Button } from "@components/Button";
 import {
     createStyles,
+    gradients,
     spacing,
     typography,
     useThemeColors,
 } from "@constants/theme";
+import { Feather } from "@expo/vector-icons";
 import { Profile, supabase } from "@services/supabase";
 import { useAppStore } from "@store/appStore";
+import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
     ActivityIndicator,
-    Image,
     SafeAreaView,
     ScrollView,
     StyleSheet,
@@ -165,45 +168,47 @@ export const PublicProfileDetail: React.FC<PublicProfileDetailProps> = ({
         contentContainerStyle={localStyles.content}
         showsVerticalScrollIndicator={false}
       >
-        {profile.photo_url ? (
-          <Image
-            source={{ uri: profile.photo_url }}
-            style={localStyles.heroImage}
-            resizeMode="cover"
+        <View style={localStyles.heroWrap}>
+          {profile.photo_url ? (
+            <Image
+              source={{ uri: profile.photo_url }}
+              style={StyleSheet.absoluteFill}
+              contentFit="cover"
+              transition={250}
+            />
+          ) : (
+            <LinearGradient
+              colors={gradients.brand}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[StyleSheet.absoluteFill, localStyles.imagePlaceholder]}
+            >
+              <Text style={localStyles.heroInitial}>
+                {profile.display_name.charAt(0).toUpperCase()}
+              </Text>
+            </LinearGradient>
+          )}
+          <LinearGradient
+            colors={gradients.photoScrim}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
           />
-        ) : (
-          <View
-            style={[
-              localStyles.heroImage,
-              localStyles.imagePlaceholder,
-              { backgroundColor: colors.surfaceCard },
-            ]}
-          >
-            <Text style={[typography.display, { color: colors.textSecondary }]}>
-              {profile.display_name.charAt(0).toUpperCase()}
+          <View style={localStyles.interestBadge}>
+            <Feather name="heart" size={12} color="#FFFFFF" />
+            <Text style={localStyles.interestBadgeText}>Wants to connect</Text>
+          </View>
+          <View style={localStyles.heroInfo}>
+            <Text style={localStyles.heroName} numberOfLines={1}>
+              {profile.display_name}
+            </Text>
+            <Text style={localStyles.heroMeta} numberOfLines={1}>
+              {profile.role_title} · {profile.industry}
+            </Text>
+            <Text style={localStyles.heroSub}>
+              {formatExperience(profile.experience_level)}
             </Text>
           </View>
-        )}
-
-        <Text style={[typography.headline, { color: colors.textPrimary }]}>
-          {profile.display_name}
-        </Text>
-        <Text
-          style={[
-            typography.body,
-            { color: colors.textSecondary, marginTop: spacing.xs },
-          ]}
-        >
-          {profile.role_title}
-        </Text>
-        <Text
-          style={[
-            typography.caption,
-            { color: colors.textTertiary, marginTop: spacing.xs },
-          ]}
-        >
-          {profile.industry} · {formatExperience(profile.experience_level)}
-        </Text>
+        </View>
 
         <Text
           style={[
@@ -320,15 +325,61 @@ const localStyles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
   },
-  heroImage: {
-    aspectRatio: 2 / 3,
-    borderRadius: 16,
-    marginBottom: spacing.xl,
+  heroWrap: {
     width: "100%",
+    aspectRatio: 3 / 4,
+    borderRadius: 28,
+    overflow: "hidden",
+    marginBottom: spacing.lg,
   },
   imagePlaceholder: {
     alignItems: "center",
     justifyContent: "center",
+  },
+  heroInitial: {
+    color: "rgba(255,255,255,0.92)",
+    fontSize: 120,
+    fontWeight: "800",
+  },
+  heroInfo: {
+    position: "absolute",
+    left: spacing.lg,
+    right: spacing.lg,
+    bottom: spacing.lg,
+  },
+  heroName: {
+    color: "#FFFFFF",
+    fontSize: 30,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+  },
+  heroMeta: {
+    color: "rgba(255,255,255,0.92)",
+    fontSize: 15,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  heroSub: {
+    color: "rgba(255,255,255,0.75)",
+    fontSize: 13,
+    marginTop: 2,
+  },
+  interestBadge: {
+    position: "absolute",
+    top: spacing.lg,
+    left: spacing.lg,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: "rgba(236,72,153,0.92)",
+  },
+  interestBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "700",
   },
   prompts: {
     marginTop: spacing.xl,

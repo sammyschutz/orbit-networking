@@ -1,30 +1,38 @@
-import { useColorScheme } from "@/components/useColorScheme";
-import Colors from "@/constants/Colors";
+import { useThemeColors } from "@constants/theme";
 import { Feather } from "@expo/vector-icons";
-import { useAuth } from "@hooks/useAuth";
 import { useAppStore } from "@store/appStore";
 import { Tabs } from "expo-router";
-import { Button } from "react-native";
+import { Platform } from "react-native";
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-  const { signOut } = useAuth();
+  const colors = useThemeColors();
   const unreadCount = useAppStore((state) => state.unreadCount);
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
-        headerShown: true,
-        headerRight: () => <Button title="Sign Out" onPress={signOut} />,
+        headerShown: false,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textTertiary,
+        tabBarStyle: {
+          backgroundColor: colors.surfaceBg,
+          borderTopColor: colors.border,
+          borderTopWidth: 0.5,
+          height: Platform.OS === "ios" ? 88 : 64,
+          paddingTop: 8,
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: "600",
+        },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: "Discover",
-          tabBarIcon: ({ color }) => (
-            <Feather name="heart" size={24} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <Feather name="zap" size={focused ? 25 : 23} color={color} />
           ),
         }}
       />
@@ -33,8 +41,9 @@ export default function TabLayout() {
         options={{
           title: "Connections",
           tabBarBadge: unreadCount || undefined,
-          tabBarIcon: ({ color }) => (
-            <Feather name="users" size={24} color={color} />
+          tabBarBadgeStyle: { backgroundColor: colors.secondary },
+          tabBarIcon: ({ color, focused }) => (
+            <Feather name="users" size={focused ? 25 : 23} color={color} />
           ),
         }}
       />
@@ -42,8 +51,8 @@ export default function TabLayout() {
         name="settings"
         options={{
           title: "Settings",
-          tabBarIcon: ({ color }) => (
-            <Feather name="settings" size={24} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <Feather name="settings" size={focused ? 25 : 23} color={color} />
           ),
         }}
       />

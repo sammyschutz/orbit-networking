@@ -1,13 +1,24 @@
-import React from 'react';
+import { Avatar } from "@components/Avatar";
 import {
-  View,
-  StyleSheet,
-  ViewStyle,
+  avatarGradient,
+  borderRadius,
+  elevation,
+  gradients,
+  spacing,
+  typography,
+  useThemeColors,
+} from "@constants/theme";
+import { Feather } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
+import React, { useState } from "react";
+import {
   StyleProp,
-  Image,
+  StyleSheet,
   Text,
-} from 'react-native';
-import { useThemeColors, elevation, spacing, borderRadius, typography } from '@constants/theme';
+  View,
+  ViewStyle,
+} from "react-native";
 
 interface CardProps {
   children?: React.ReactNode;
@@ -38,6 +49,14 @@ export const Card: React.FC<CardProps> = ({ children, style, testID }) => {
   );
 };
 
+const EXPERIENCE_LABELS: Record<string, string> = {
+  student: "Student",
+  early: "Early career",
+  mid: "Mid-career",
+  senior: "Senior",
+  founder: "Founder",
+};
+
 interface ProfileCardProps {
   image?: string;
   name: string;
@@ -45,13 +64,16 @@ interface ProfileCardProps {
   industry: string;
   bio?: string;
   prompt?: string;
+  experience?: string;
   style?: StyleProp<ViewStyle>;
   testID?: string;
 }
 
 /**
- * Profile card for discovery deck
- * Displays user photo, name, role, industry, and optional bio/prompt
+ * Full-bleed profile card for the discovery deck.
+ * Photo fills the whole card with a gradient scrim; details sit over the
+ * bottom of the image. Falls back to a colorful gradient + initial when the
+ * photo is missing or fails to load.
  */
 export const ProfileCard: React.FC<ProfileCardProps> = ({
   image,
@@ -60,97 +82,85 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
   industry,
   bio,
   prompt,
+  experience,
   style,
   testID,
 }) => {
-  const colors = useThemeColors();
+  const [imgFailed, setImgFailed] = useState(false);
+  const showImage = !!image && !imgFailed;
+  const [from, to] = avatarGradient(name);
 
   return (
-    <Card style={[styles.profileCard, style]} testID={testID}>
-      {image && (
+    <View style={[styles.profileCard, style]} testID={testID}>
+      {showImage ? (
         <Image
           source={{ uri: image }}
-          style={styles.profileImage}
-          testID={`${testID}:image`}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          transition={250}
+          onError={() => setImgFailed(true)}
+          testID={testID ? `${testID}:image` : undefined}
         />
+      ) : (
+        <LinearGradient
+          colors={[from, to]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[StyleSheet.absoluteFill, styles.fallback]}
+        >
+          <Text style={styles.fallbackInitial}>
+            {(name?.charAt(0) || "?").toUpperCase()}
+          </Text>
+        </LinearGradient>
       )}
 
+      {/* Legibility scrim */}
+      <LinearGradient
+        colors={gradients.photoScrim}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+
+      {/* Experience pill */}
+      {experience && (
+        <View style={styles.pill}>
+          <Feather name="award" size={12} color="#FFFFFF" />
+          <Text style={styles.pillText}>
+            {EXPERIENCE_LABELS[experience] ?? experience}
+          </Text>
+        </View>
+      )}
+
+      {/* Bottom info */}
       <View style={styles.profileInfo}>
-        <Text
-          style={[
-            styles.profileName,
-            {
-              color: colors.textPrimary,
-            },
-          ]}
-          numberOfLines={1}
-        >
+        <Text style={styles.profileName} numberOfLines={1}>
           {name}
         </Text>
 
-        <Text
-          style={[
-            styles.profileTitle,
-            {
-              color: colors.textSecondary,
-            },
-          ]}
-          numberOfLines={1}
-        >
-          {title}
-        </Text>
+        <View style={styles.metaRow}>
+          <Feather name="briefcase" size={13} color="rgba(255,255,255,0.9)" />
+          <Text style={styles.profileTitle} numberOfLines={1}>
+            {title}
+            {industry ? `  ·  ${industry}` : ""}
+          </Text>
+        </View>
 
-        <Text
-          style={[
-            styles.profileIndustry,
-            {
-              color: colors.textTertiary,
-            },
-          ]}
-          numberOfLines={1}
-        >
-          {industry}
-        </Text>
-
-        {bio && (
-          <Text
-            style={[
-              styles.profileBio,
-              {
-                color: colors.textSecondary,
-              },
-            ]}
-            numberOfLines={2}
-          >
+        {bio ? (
+          <Text style={styles.profileBio} numberOfLines={2}>
             {bio}
           </Text>
-        )}
+        ) : null}
 
-        {prompt && (
-          <View
-            style={[
-              styles.promptBox,
-              {
-                backgroundColor: colors.surfaceInput,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.promptText,
-                {
-                  color: colors.textPrimary,
-                },
-              ]}
-              numberOfLines={2}
-            >
+        {prompt ? (
+          <View style={styles.promptChip}>
+            <Feather name="message-circle" size={13} color="#FFFFFF" />
+            <Text style={styles.promptText} numberOfLines={2}>
               {prompt}
             </Text>
           </View>
-        )}
+        ) : null}
       </View>
-    </Card>
+    </View>
   );
 };
 
@@ -166,8 +176,8 @@ interface ConnectionCardProps {
 }
 
 /**
- * Connection card for connections list
- * Compact card showing connected user info
+ * Connection card for the connections list. Compact tile with avatar,
+ * gradient "new" badge, and a chevron affordance.
  */
 export const ConnectionCard: React.FC<ConnectionCardProps> = ({
   image,
@@ -181,201 +191,187 @@ export const ConnectionCard: React.FC<ConnectionCardProps> = ({
   const colors = useThemeColors();
 
   return (
-    <Card
+    <View
       style={[
         styles.connectionCard,
-        {
-          borderLeftWidth: 3,
-          borderLeftColor: colors.success,
-        },
+        { backgroundColor: colors.surfaceCard, ...elevation.md },
       ]}
       testID={testID}
     >
-      <View style={styles.connectionContent}>
-        {image ? (
-          <Image
-            source={{ uri: image }}
-            style={styles.connectionImage}
-            testID={`${testID}:image`}
-          />
-        ) : (
-          <View
-            style={[
-              styles.connectionImage,
-              styles.connectionImagePlaceholder,
-              { backgroundColor: colors.surfaceInput },
-            ]}
-          >
-            <Text style={[typography.title, { color: colors.textSecondary }]}>
-              {name.charAt(0).toUpperCase()}
-            </Text>
-          </View>
-        )}
+      <Avatar uri={image} name={name} size={60} radius={18} />
 
-        <View style={styles.connectionInfo}>
-          <View style={styles.connectionNameRow}>
-            <Text
-              style={[
-                styles.connectionName,
-                {
-                  color: colors.textPrimary,
-                },
-              ]}
-              numberOfLines={1}
-            >
-              {name}
-            </Text>
-            {isNew && (
-              <View
-                style={[
-                  styles.newBadge,
-                  { backgroundColor: colors.success },
-                ]}
-              >
-                <Text style={styles.newBadgeText}>New</Text>
-              </View>
-            )}
-          </View>
-
+      <View style={styles.connectionInfo}>
+        <View style={styles.connectionNameRow}>
           <Text
-            style={[
-              styles.connectionTitle,
-              {
-                color: colors.textSecondary,
-              },
-            ]}
+            style={[styles.connectionName, { color: colors.textPrimary }]}
             numberOfLines={1}
           >
-            {title}
+            {name}
           </Text>
-
-          <Text
-            style={[
-              styles.connectionIndustry,
-              {
-                color: colors.textTertiary,
-              },
-            ]}
-            numberOfLines={1}
-          >
-            {industry}
-          </Text>
-
-          {matchedDate && (
-            <Text
-              style={[
-                styles.connectionDate,
-                {
-                  color: colors.textTertiary,
-                },
-              ]}
-              numberOfLines={1}
+          {isNew && (
+            <LinearGradient
+              colors={gradients.like}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.newBadge}
             >
-              {matchedDate}
-            </Text>
+              <Text style={styles.newBadgeText}>NEW</Text>
+            </LinearGradient>
           )}
         </View>
+
+        <Text
+          style={[styles.connectionTitle, { color: colors.textSecondary }]}
+          numberOfLines={1}
+        >
+          {title}
+          {industry ? `  ·  ${industry}` : ""}
+        </Text>
+
+        {matchedDate ? (
+          <Text
+            style={[styles.connectionDate, { color: colors.textTertiary }]}
+            numberOfLines={1}
+          >
+            {matchedDate}
+          </Text>
+        ) : null}
       </View>
-    </Card>
+
+      <Feather name="chevron-right" size={22} color={colors.textTertiary} />
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   card: {
     borderRadius: borderRadius.lg,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   profileCard: {
-    height: '100%',
-    maxHeight: 600,
+    width: "100%",
+    height: "100%",
+    borderRadius: 28,
+    overflow: "hidden",
+    backgroundColor: "#1E293B",
+    ...elevation.xl,
   },
-  profileImage: {
-    width: '100%',
-    height: '60%',
-    resizeMode: 'cover',
+  fallback: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  fallbackInitial: {
+    color: "rgba(255,255,255,0.92)",
+    fontSize: 140,
+    fontWeight: "800",
+  },
+  pill: {
+    position: "absolute",
+    top: spacing.lg,
+    right: spacing.lg,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 7,
+    borderRadius: borderRadius.full,
+    backgroundColor: "rgba(15,23,42,0.45)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
+  },
+  pillText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "700",
   },
   profileInfo: {
-    flex: 1,
-    padding: spacing.lg,
-    justifyContent: 'space-between',
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    padding: spacing.xl,
+    gap: spacing.sm,
+  },
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   profileName: {
-    ...typography.title,
-    marginBottom: spacing.xs,
+    fontSize: 30,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    letterSpacing: -0.5,
   },
   profileTitle: {
     ...typography.body,
-    marginBottom: spacing.xs,
-  },
-  profileIndustry: {
-    ...typography.caption,
-    marginBottom: spacing.md,
+    color: "rgba(255,255,255,0.92)",
+    flexShrink: 1,
+    fontWeight: "600",
   },
   profileBio: {
     ...typography.body,
-    marginBottom: spacing.md,
-    lineHeight: 22,
+    color: "rgba(255,255,255,0.82)",
+    lineHeight: 21,
   },
-  promptBox: {
+  promptChip: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     borderRadius: borderRadius.md,
+    backgroundColor: "rgba(255,255,255,0.16)",
     borderWidth: 1,
-    padding: spacing.md,
-    marginTop: spacing.md,
+    borderColor: "rgba(255,255,255,0.22)",
   },
   promptText: {
     ...typography.caption,
+    color: "#FFFFFF",
+    flex: 1,
+    fontWeight: "500",
+    lineHeight: 17,
   },
   connectionCard: {
-    marginBottom: spacing.lg,
-    padding: spacing.lg,
-  },
-  connectionContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  connectionImage: {
-    width: 80,
-    height: 80,
-    borderRadius: borderRadius.lg,
-    marginRight: spacing.lg,
-  },
-  connectionImagePlaceholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.lg,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: 22,
   },
   connectionInfo: {
     flex: 1,
   },
   connectionNameRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.sm,
-    marginBottom: spacing.xs,
+    marginBottom: 3,
   },
   connectionName: {
-    ...typography.label,
-    flex: 1,
+    ...typography.title,
+    fontSize: 18,
+    flexShrink: 1,
   },
   newBadge: {
-    borderRadius: borderRadius.sm,
+    borderRadius: borderRadius.full,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
+    paddingVertical: 3,
   },
   newBadgeText: {
-    ...typography.caption,
-    color: '#FFFFFF',
-    fontWeight: '700',
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.5,
   },
   connectionTitle: {
-    ...typography.caption,
-    marginBottom: spacing.xs,
-  },
-  connectionIndustry: {
-    ...typography.caption,
-    marginBottom: spacing.xs,
+    ...typography.body,
+    fontSize: 14,
+    marginBottom: 2,
   },
   connectionDate: {
     ...typography.caption,
-    marginTop: spacing.sm,
   },
 });

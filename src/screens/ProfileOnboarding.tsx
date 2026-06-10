@@ -118,12 +118,12 @@ export const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({
         throw uploadError ?? new Error("Upload failed");
       }
 
-      const { data: publicUrlData, error: publicUrlError } = supabase.storage
+      const { data: publicUrlData } = supabase.storage
         .from(SUPABASE_BUCKET)
         .getPublicUrl(filename);
 
-      if (publicUrlError || !publicUrlData?.publicUrl) {
-        throw publicUrlError ?? new Error("Failed to generate public URL");
+      if (!publicUrlData?.publicUrl) {
+        throw new Error("Failed to generate public URL");
       }
 
       return publicUrlData.publicUrl;
@@ -183,7 +183,7 @@ export const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({
           industry,
           experience_level: experienceLevel as Profile["experience_level"],
           bio,
-          photo_url: uploadedPhotoUrl,
+          photo_url: uploadedPhotoUrl as string,
           ask_me_about: askMeAbout || null,
           learning_about: learningAbout || null,
           side_project: sideProject || null,

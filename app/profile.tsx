@@ -164,12 +164,12 @@ export default function ProfileScreen() {
       throw uploadError ?? new Error("Failed to upload profile photo.");
     }
 
-    const { data: publicUrlData, error: publicUrlError } = supabase.storage
+    const { data: publicUrlData } = supabase.storage
       .from(SUPABASE_BUCKET)
       .getPublicUrl(filename);
 
-    if (publicUrlError || !publicUrlData?.publicUrl) {
-      throw publicUrlError ?? new Error("Failed to generate public photo URL.");
+    if (!publicUrlData?.publicUrl) {
+      throw new Error("Failed to generate public photo URL.");
     }
 
     return publicUrlData.publicUrl;
@@ -398,7 +398,7 @@ export default function ProfileScreen() {
         />
 
         {error ? (
-          <Text style={[styles.errorText, { color: colors.error }]}>
+          <Text style={[typography.caption, { color: colors.error, marginTop: spacing.sm }]}>
             {error}
           </Text>
         ) : null}

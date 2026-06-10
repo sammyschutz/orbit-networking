@@ -52,6 +52,43 @@ export const darkColors = {
 export type ColorScheme = Record<keyof typeof lightColors, string>;
 
 /**
+ * Brand gradients (vibrant indigo → violet → pink direction).
+ * Arrays are ready to drop into expo-linear-gradient `colors`.
+ */
+export const gradients = {
+  brand: ["#6366F1", "#8B5CF6", "#EC4899"] as const,
+  brandSoft: ["#818CF8", "#C084FC"] as const,
+  like: ["#10B981", "#34D399"] as const,
+  nope: ["#F43F5E", "#FB7185"] as const,
+  // Bottom-up scrim for legible text over photos.
+  photoScrim: ["transparent", "rgba(15,23,42,0.15)", "rgba(15,23,42,0.92)"] as const,
+  glow: ["#A78BFA", "#F0ABFC"] as const,
+} as const;
+
+/**
+ * Deterministic avatar gradient based on a name/string so initials-only
+ * fallbacks still look colorful and intentional.
+ */
+const avatarGradients: readonly (readonly [string, string])[] = [
+  ["#6366F1", "#EC4899"],
+  ["#8B5CF6", "#6366F1"],
+  ["#EC4899", "#F59E0B"],
+  ["#06B6D4", "#6366F1"],
+  ["#10B981", "#06B6D4"],
+  ["#F43F5E", "#8B5CF6"],
+  ["#F59E0B", "#EF4444"],
+  ["#0EA5E9", "#22D3EE"],
+];
+
+export const avatarGradient = (seed = ""): readonly [string, string] => {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash = (hash * 31 + seed.charCodeAt(i)) % 997;
+  }
+  return avatarGradients[hash % avatarGradients.length];
+};
+
+/**
  * Hook to get current theme colors based on system preference
  */
 export const useThemeColors = (): ColorScheme => {
@@ -149,6 +186,13 @@ export const elevation = {
     shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 4,
+  },
+  xl: {
+    shadowColor: '#4F46E5',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.28,
+    shadowRadius: 24,
+    elevation: 12,
   },
 } as const;
 

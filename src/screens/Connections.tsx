@@ -9,9 +9,18 @@ import {
   Pressable,
   ActivityIndicator,
   RefreshControl,
-  Image,
 } from 'react-native';
-import { useThemeColors, typography, spacing, createStyles } from '@constants/theme';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Feather } from '@expo/vector-icons';
+import {
+  useThemeColors,
+  typography,
+  spacing,
+  borderRadius,
+  gradients,
+  createStyles,
+} from '@constants/theme';
 import { ConnectionCard } from '@components/Card';
 import { useAppStore } from '@store/appStore';
 import { supabase, Connection, Profile } from '@services/supabase';
@@ -152,12 +161,21 @@ export const ConnectionsList: React.FC = () => {
     return (
       <SafeAreaView style={[styles.screen, { backgroundColor: colors.surfaceBg }]}>
         <View style={[styles.container, localStyles.emptyState]}>
+          <LinearGradient
+            colors={gradients.brand}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={localStyles.emptyIcon}
+          >
+            <Feather name="users" size={32} color="#FFFFFF" />
+          </LinearGradient>
           <Text
             style={[
-              typography.headline,
+              typography.title,
               {
-                color: colors.textSecondary,
-                marginBottom: spacing.lg,
+                color: colors.textPrimary,
+                marginTop: spacing.lg,
+                marginBottom: spacing.sm,
                 textAlign: 'center',
               },
             ]}
@@ -168,7 +186,7 @@ export const ConnectionsList: React.FC = () => {
             style={[
               typography.body,
               {
-                color: colors.textTertiary,
+                color: colors.textSecondary,
                 textAlign: 'center',
                 lineHeight: 24,
               },
@@ -186,12 +204,15 @@ export const ConnectionsList: React.FC = () => {
       <View style={styles.container}>
         {/* Header */}
         <View style={localStyles.header}>
-          <Text style={[typography.headline, { color: colors.textPrimary }]}>
+          <Text style={[localStyles.headerTitle, { color: colors.textPrimary }]}>
             Connections
           </Text>
-          <Text style={[typography.caption, { color: colors.textSecondary }]}>
-            {connectionsWithProfiles.length} connected
-          </Text>
+          <View style={[localStyles.countPill, { backgroundColor: colors.surfaceInput }]}>
+            <Feather name="zap" size={12} color={colors.primary} />
+            <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700' }]}>
+              {connectionsWithProfiles.length} connected
+            </Text>
+          </View>
         </View>
 
         {/* Connections list */}
@@ -320,40 +341,42 @@ export const ConnectionDetail: React.FC<ConnectionDetailProps> = ({ connectionId
       <ScrollView contentContainerStyle={styles.container}>
         {/* Close button would be in header navigation */}
         <View style={localStyles.profileDetail}>
-          {/* Profile image */}
-          {profile.photo_url ? (
-            <Image
-              source={{ uri: profile.photo_url }}
-              style={localStyles.profileImage}
-              resizeMode="cover"
+          {/* Profile image with name overlay */}
+          <View style={localStyles.heroWrap}>
+            {profile.photo_url ? (
+              <Image
+                source={{ uri: profile.photo_url }}
+                style={localStyles.profileImage}
+                contentFit="cover"
+                transition={250}
+              />
+            ) : (
+              <LinearGradient
+                colors={gradients.brand}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[localStyles.profileImage, localStyles.profileImagePlaceholder]}
+              >
+                <Text style={localStyles.heroInitial}>
+                  {profile.display_name.charAt(0).toUpperCase()}
+                </Text>
+              </LinearGradient>
+            )}
+            <LinearGradient
+              colors={gradients.photoScrim}
+              style={localStyles.heroScrim}
+              pointerEvents="none"
             />
-          ) : (
-            <View
-              style={[
-                localStyles.profileImage,
-                localStyles.profileImagePlaceholder,
-                { backgroundColor: colors.surfaceCard },
-              ]}
-            >
-              <Text style={[typography.headline, { color: colors.textSecondary }]}>
-                {profile.display_name.charAt(0).toUpperCase()}
-              </Text>
+            <View style={localStyles.connectedBadge}>
+              <Feather name="zap" size={12} color="#FFFFFF" />
+              <Text style={localStyles.connectedBadgeText}>Connected</Text>
             </View>
-          )}
+            <Text style={localStyles.heroName} numberOfLines={1}>
+              {profile.display_name}
+            </Text>
+          </View>
 
           {/* Profile info */}
-          <Text
-            style={[
-              typography.headline,
-              {
-                color: colors.textPrimary,
-                marginTop: spacing.xl,
-                marginBottom: spacing.sm,
-              },
-            ]}
-          >
-            {profile.display_name}
-          </Text>
 
           <Text
             style={[
@@ -469,7 +492,24 @@ const localStyles = StyleSheet.create({
     alignItems: 'center',
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: spacing.lg,
+    marginTop: spacing.sm,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  countPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: borderRadius.full,
   },
   emptyState: {
     flex: 1,
@@ -477,21 +517,72 @@ const localStyles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
   },
+  emptyIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   listContent: {
     paddingBottom: spacing.xl,
   },
   profileDetail: {
-    paddingVertical: spacing.xl,
+    paddingVertical: spacing.lg,
+  },
+  heroWrap: {
+    width: '100%',
+    height: 360,
+    borderRadius: 28,
+    overflow: 'hidden',
+    marginBottom: spacing.lg,
   },
   profileImage: {
     width: '100%',
-    height: 300,
-    borderRadius: 16,
-    marginBottom: spacing.lg,
+    height: '100%',
   },
   profileImagePlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  heroInitial: {
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: 120,
+    fontWeight: '800',
+  },
+  heroScrim: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  heroName: {
+    position: 'absolute',
+    left: spacing.lg,
+    bottom: spacing.lg,
+    right: spacing.lg,
+    color: '#FFFFFF',
+    fontSize: 30,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  connectedBadge: {
+    position: 'absolute',
+    top: spacing.lg,
+    left: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: 'rgba(16,185,129,0.92)',
+  },
+  connectedBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   promptItem: {
     marginBottom: spacing.xl,

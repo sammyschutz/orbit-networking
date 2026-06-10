@@ -2,11 +2,14 @@ import { Button } from "@components/Button";
 import { TextInput } from "@components/TextInput";
 import {
     createStyles,
+    gradients,
     spacing,
     typography,
     useThemeColors,
 } from "@constants/theme";
+import { Feather } from "@expo/vector-icons";
 import { useAuth } from "@hooks/useAuth";
+import { LinearGradient } from "expo-linear-gradient";
 import React, { useState } from "react";
 import {
     KeyboardAvoidingView,
@@ -18,6 +21,36 @@ import {
     Text,
     View,
 } from "react-native";
+
+const BrandMark: React.FC<{ label: string; tagline: string }> = ({
+  label,
+  tagline,
+}) => {
+  const colors = useThemeColors();
+  return (
+    <View style={localStyles.header}>
+      <LinearGradient
+        colors={gradients.brand}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={localStyles.logoBadge}
+      >
+        <Feather name="zap" size={34} color="#FFFFFF" />
+      </LinearGradient>
+      <Text style={[localStyles.brandTitle, { color: colors.textPrimary }]}>
+        {label}
+      </Text>
+      <Text
+        style={[
+          typography.body,
+          { color: colors.textSecondary, textAlign: "center" },
+        ]}
+      >
+        {tagline}
+      </Text>
+    </View>
+  );
+};
 
 interface AuthScreenProps {
   onSuccess?: () => void;
@@ -74,31 +107,10 @@ export const LoginScreen: React.FC<AuthScreenProps> = ({
           showsVerticalScrollIndicator={false}
         >
           {/* Header */}
-          <View style={localStyles.header}>
-            <Text
-              style={[
-                typography.display,
-                {
-                  color: colors.primary,
-                  marginBottom: spacing.md,
-                },
-              ]}
-            >
-              Zap
-            </Text>
-            <Text
-              style={[
-                typography.body,
-                {
-                  color: colors.textSecondary,
-                  textAlign: "center",
-                },
-              ]}
-            >
-              Explore careers, meet professionals, learn without LinkedIn
-              pressure.
-            </Text>
-          </View>
+          <BrandMark
+            label="Zap"
+            tagline="Explore careers, meet professionals, learn without LinkedIn pressure."
+          />
 
           {/* Form */}
           <View style={localStyles.form}>
@@ -241,30 +253,10 @@ export const SignUpScreen: React.FC<AuthScreenProps> = ({
           showsVerticalScrollIndicator={false}
         >
           {/* Header */}
-          <View style={localStyles.header}>
-            <Text
-              style={[
-                typography.display,
-                {
-                  color: colors.primary,
-                  marginBottom: spacing.md,
-                },
-              ]}
-            >
-              Join Zap
-            </Text>
-            <Text
-              style={[
-                typography.body,
-                {
-                  color: colors.textSecondary,
-                  textAlign: "center",
-                },
-              ]}
-            >
-              Start exploring careers and connecting with professionals.
-            </Text>
-          </View>
+          <BrandMark
+            label="Join Zap"
+            tagline="Start exploring careers and connecting with professionals."
+          />
 
           {/* Form */}
           <View style={localStyles.form}>
@@ -364,6 +356,25 @@ const localStyles = StyleSheet.create({
   header: {
     alignItems: "center",
     marginBottom: spacing.xxl,
+  },
+  logoBadge: {
+    width: 76,
+    height: 76,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.lg,
+    shadowColor: "#6366F1",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  brandTitle: {
+    fontSize: 40,
+    fontWeight: "800",
+    letterSpacing: -1,
+    marginBottom: spacing.sm,
   },
   form: {
     marginBottom: spacing.xl,

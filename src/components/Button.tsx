@@ -1,19 +1,25 @@
-import React from 'react';
 import {
+  borderRadius,
+  gradients,
+  spacing,
+  typography,
+  useThemeColors,
+} from "@constants/theme";
+import { LinearGradient } from "expo-linear-gradient";
+import React from "react";
+import {
+  ActivityIndicator,
   Pressable,
   StyleSheet,
   Text,
   ViewStyle,
-  TextStyle,
-  ActivityIndicator,
-} from 'react-native';
-import { useThemeColors, typography, spacing, borderRadius } from '@constants/theme';
+} from "react-native";
 
 interface ButtonProps {
   onPress: () => void;
   title: string;
-  variant?: 'primary' | 'secondary' | 'danger';
-  size?: 'sm' | 'md' | 'lg';
+  variant?: "primary" | "secondary" | "danger";
+  size?: "sm" | "md" | "lg";
   loading?: boolean;
   disabled?: boolean;
   style?: ViewStyle;
@@ -21,95 +27,131 @@ interface ButtonProps {
 }
 
 /**
- * Reusable Button component with design system defaults
- * Touch target: 44×44pt minimum
- * Feedback: Scale + opacity on press (80ms duration)
+ * Reusable Button. Primary renders a vibrant brand gradient; secondary and
+ * danger are solid. Scale + opacity feedback on press.
  */
 export const Button: React.FC<ButtonProps> = ({
   onPress,
   title,
-  variant = 'primary',
-  size = 'md',
+  variant = "primary",
+  size = "md",
   loading = false,
   disabled = false,
   style,
   testID,
 }) => {
   const colors = useThemeColors();
+  const isDisabled = disabled || loading;
 
-  const getBackgroundColor = () => {
-    if (disabled) return colors.surfaceInput;
-    if (variant === 'secondary') return colors.secondary;
-    if (variant === 'danger') return colors.error;
-    return colors.primary;
-  };
+  const sizeStyle = getSizeStyles(size);
 
-  const getSizeStyles = () => {
-    switch (size) {
-      case 'sm':
-        return {
-          paddingVertical: spacing.sm,
-          paddingHorizontal: spacing.md,
-          minHeight: 36,
-        };
-      case 'lg':
-        return {
-          paddingVertical: spacing.lg,
-          paddingHorizontal: spacing.xl,
-          minHeight: 52,
-        };
-      default: // md
-        return {
-          paddingVertical: spacing.md,
-          paddingHorizontal: spacing.lg,
-          minHeight: 44,
-        };
-    }
-  };
+  const content = loading ? (
+    <ActivityIndicator color="#FFFFFF" size="small" />
+  ) : (
+    <Text style={styles.buttonText}>{title}</Text>
+  );
+
+  // Primary → gradient
+  if (variant === "primary") {
+    return (
+      <Pressable
+        onPress={onPress}
+        disabled={isDisabled}
+        android_ripple={{ color: "rgba(255,255,255,0.18)" }}
+        style={({ pressed }) => [
+          styles.shadow,
+          {
+            opacity: isDisabled ? 0.55 : 1,
+            transform: [{ scale: pressed && !isDisabled ? 0.98 : 1 }],
+            borderRadius: borderRadius.lg,
+          },
+          style,
+        ]}
+        testID={testID}
+      >
+        <LinearGradient
+          colors={gradients.brand}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.button, sizeStyle]}
+        >
+          {content}
+        </LinearGradient>
+      </Pressable>
+    );
+  }
+
+  // Secondary / danger → solid
+  const bg = variant === "danger" ? colors.error : colors.surfaceInput;
+  const textColor = variant === "danger" ? "#FFFFFF" : colors.textPrimary;
 
   return (
     <Pressable
       onPress={onPress}
-      disabled={disabled || loading}
-      android_ripple={{ color: 'rgba(0, 0, 0, 0.1)' }}
+      disabled={isDisabled}
+      android_ripple={{ color: "rgba(0,0,0,0.08)" }}
       style={({ pressed }) => [
         styles.button,
+        sizeStyle,
         {
-          backgroundColor: getBackgroundColor(),
-          opacity: pressed && !disabled ? 0.9 : 1,
-          transform: [{ scale: pressed && !disabled ? 0.98 : 1 }],
+          backgroundColor: bg,
+          opacity: isDisabled ? 0.55 : pressed ? 0.9 : 1,
+          transform: [{ scale: pressed && !isDisabled ? 0.98 : 1 }],
         },
-        getSizeStyles(),
         style,
       ]}
       testID={testID}
     >
       {loading ? (
-        <ActivityIndicator color={disabled ? colors.textTertiary : '#FFFFFF'} size="small" />
+        <ActivityIndicator color={textColor} size="small" />
       ) : (
-        <Text
-          style={[
-            styles.buttonText,
-            {
-              color: disabled ? colors.textTertiary : '#FFFFFF',
-            },
-          ]}
-        >
-          {title}
-        </Text>
+        <Text style={[styles.buttonText, { color: textColor }]}>{title}</Text>
       )}
     </Pressable>
   );
 };
 
+const getSizeStyles = (size: "sm" | "md" | "lg"): ViewStyle => {
+  switch (size) {
+    case "sm":
+      return {
+        paddingVertical: spacing.sm,
+        paddingHorizontal: spacing.md,
+        minHeight: 38,
+      };
+    case "lg":
+      return {
+        paddingVertical: spacing.lg,
+        paddingHorizontal: spacing.xl,
+        minHeight: 54,
+      };
+    default:
+      return {
+        paddingVertical: spacing.md,
+        paddingHorizontal: spacing.lg,
+        minHeight: 50,
+      };
+  }
+};
+
 const styles = StyleSheet.create({
   button: {
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: borderRadius.lg,
+    alignItems: "center",
+    justifyContent: "center",
   },
   buttonText: {
     ...typography.label,
-    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    textAlign: "center",
+  },
+  shadow: {
+    shadowColor: "#6366F1",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 6,
   },
 });

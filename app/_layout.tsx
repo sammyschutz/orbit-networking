@@ -52,7 +52,7 @@ export default function RootLayout() {
   if (!loaded) return null;
 
   return (
-    <Stack>
+    <Stack screenOptions={{ headerBackButtonDisplayMode: "minimal" }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="auth" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
