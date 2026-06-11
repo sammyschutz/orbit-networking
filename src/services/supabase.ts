@@ -100,3 +100,102 @@ export interface Notification {
   read_at?: string;
   created_at: string;
 }
+
+// --- Safe messaging (spec §4) -------------------------------------------------
+
+export interface Conversation {
+  id: string;
+  connection_id: string;
+  user_a_id: string;
+  user_b_id: string;
+  last_message_at: string | null;
+  last_message_preview: string | null;
+  user_a_last_read_at: string | null;
+  user_b_last_read_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Whether a conversation has messages the given user hasn't read yet. True when
+ * the latest message is newer than that participant's read pointer (or they have
+ * never read it). The sender's pointer is advanced server-side on send, so a
+ * user's own messages never count as unread for them.
+ */
+export function isConversationUnread(
+  conversation: Conversation,
+  userId: string | null | undefined,
+): boolean {
+  if (!userId || !conversation.last_message_at) return false;
+  const lastRead =
+    conversation.user_a_id === userId
+      ? conversation.user_a_last_read_at
+      : conversation.user_b_last_read_at;
+  if (!lastRead) return true;
+  return new Date(conversation.last_message_at).getTime() >
+    new Date(lastRead).getTime();
+}
+
+export interface Message {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  recipient_id: string;
+  body: string;
+  status: string;
+  created_at: string;
+  deleted_at?: string | null;
+}
+
+export interface Block {
+  id: string;
+  blocker_id: string;
+  blocked_id: string;
+  reason?: string | null;
+  created_at: string;
+}
+
+export type ReportCategory =
+  | "harassment"
+  | "spam"
+  | "hate"
+  | "sexual"
+  | "threat"
+  | "other";
+
+/**
+ * Invoke a safety Edge Function with the current user's JWT (mirrors the
+ * delete-account call pattern in settings.tsx). Messaging writes are never made
+ * directly against the tables — they all flow through these functions.
+ */
+export async function invokeEdgeFunction<T = any>(
+  name: string,
+  body: unknown,
+): Promise<{ status: number; data: T | null; error: string | null }> {
+  const session = await supabase.auth.getSession();
+  const token = session.data?.session?.access_token;
+  if (!token) return { status: 401, data: null, error: "Not authenticated" };
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/${name}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      apikey: SUPABASE_ANON_KEY,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body ?? {}),
+  });
+
+  let data: any = null;
+  const contentType = res.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    data = await res.json().catch(() => null);
+  } else {
+    data = await res.text().catch(() => null);
+  }
+
+  const error = res.ok
+    ? null
+    : (data && (data.error || data.reason)) || `${res.status} ${res.statusText}`;
+  return { status: res.status, data: data as T, error };
+}

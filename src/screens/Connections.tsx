@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useState } from 'react';
 import {
   View,
   ScrollView,
@@ -22,9 +22,11 @@ import {
   createStyles,
 } from '@constants/theme';
 import { ConnectionCard } from '@components/Card';
+import { Button } from '@components/Button';
+import { SafetyMenu } from '@components/SafetyMenu';
 import { useAppStore } from '@store/appStore';
 import { supabase, Connection, Profile } from '@services/supabase';
-import { useRouter } from 'expo-router';
+import { useNavigation, useRouter } from 'expo-router';
 
 interface ConnectionWithProfile extends Connection {
   profile?: Profile;
@@ -266,10 +268,36 @@ interface ConnectionDetailProps {
 export const ConnectionDetail: React.FC<ConnectionDetailProps> = ({ connectionId, onClose }) => {
   const colors = useThemeColors();
   const styles = createStyles(colors);
+  const router = useRouter();
+  const navigation = useNavigation();
   const { currentProfile } = useAppStore();
 
   const [connection, setConnection] = useState<ConnectionWithProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [menuVisible, setMenuVisible] = useState(false);
+
+  const otherUserId =
+    connection && currentProfile?.user_id
+      ? connection.user_a_id === currentProfile.user_id
+        ? connection.user_b_id
+        : connection.user_a_id
+      : undefined;
+
+  // Header overflow menu (Block / Report / Remove connection).
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () =>
+        otherUserId ? (
+          <Pressable
+            onPress={() => setMenuVisible(true)}
+            hitSlop={12}
+            style={{ paddingHorizontal: spacing.sm }}
+          >
+            <Feather name="more-horizontal" size={22} color={colors.textPrimary} />
+          </Pressable>
+        ) : null,
+    });
+  }, [navigation, otherUserId, colors.textPrimary]);
 
   useEffect(() => {
     const loadConnection = async () => {
@@ -402,6 +430,26 @@ export const ConnectionDetail: React.FC<ConnectionDetailProps> = ({ connectionId
             {profile.industry}
           </Text>
 
+          {/* Message CTA — opens (or creates) the conversation */}
+          {otherUserId ? (
+            <Button
+              title="Message"
+              onPress={() =>
+                router.push({
+                  pathname: '/chat/[id]',
+                  params: {
+                    id: 'new',
+                    recipientId: otherUserId,
+                    connectionId: connection.id,
+                    name: profile.display_name,
+                    photo: profile.photo_url ?? '',
+                  },
+                })
+              }
+              style={{ marginBottom: spacing.lg }}
+            />
+          ) : null}
+
           {/* Bio */}
           <Text
             style={[
@@ -481,6 +529,17 @@ export const ConnectionDetail: React.FC<ConnectionDetailProps> = ({ connectionId
           )}
         </View>
       </ScrollView>
+
+      {otherUserId ? (
+        <SafetyMenu
+          visible={menuVisible}
+          onClose={() => setMenuVisible(false)}
+          otherUserId={otherUserId}
+          otherName={profile.display_name}
+          connectionId={connection.id}
+          onRelationshipEnded={() => router.back()}
+        />
+      ) : null}
     </SafeAreaView>
   );
 };

@@ -4,6 +4,7 @@ import { useFonts } from "expo-font";
 import { Stack, router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
 
 SplashScreen.preventAutoHideAsync();
@@ -52,17 +53,20 @@ export default function RootLayout() {
   if (!loaded) return null;
 
   return (
-    <Stack screenOptions={{ headerBackButtonDisplayMode: "minimal" }}>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="auth" options={{ headerShown: false }} />
-      <Stack.Screen name="onboarding" options={{ headerShown: false }} />
-      <Stack.Screen name="profile" options={{ title: "Edit profile" }} />
-      <Stack.Screen name="connection/[id]" options={{ title: "Connection" }} />
-      <Stack.Screen
-        name="public-profile/[userId]"
-        options={{ title: "Profile" }}
-      />
-      <Stack.Screen name="+not-found" />
-    </Stack>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <Stack screenOptions={{ headerBackButtonDisplayMode: "minimal" }}>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="auth" options={{ headerShown: false }} />
+        <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+        <Stack.Screen name="profile" options={{ title: "Edit profile" }} />
+        <Stack.Screen name="connection/[id]" options={{ title: "Connection" }} />
+        <Stack.Screen name="chat/[id]" options={{ title: "Chat" }} />
+        <Stack.Screen
+          name="public-profile/[userId]"
+          options={{ title: "Profile" }}
+        />
+        <Stack.Screen name="+not-found" />
+      </Stack>
+    </GestureHandlerRootView>
   );
 }
