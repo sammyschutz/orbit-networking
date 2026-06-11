@@ -5,10 +5,15 @@ import { AUDIT_EXCERPT_MAX } from "./constants.ts";
 import type { Sql } from "./rateLimit.ts";
 
 export type AuditDecision =
+  // send-attempt verdicts (one row per send attempt)
   | "allowed"
   | "blocked_content"
   | "blocked_rate"
-  | "blocked_relationship";
+  | "blocked_relationship"
+  // safety actions taken by a user (block-user / unblock-user / report-user)
+  | "action_block"
+  | "action_unblock"
+  | "action_report";
 
 export interface AuditRow {
   actor_id: string | null;

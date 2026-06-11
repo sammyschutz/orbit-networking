@@ -87,10 +87,17 @@ Deno.serve(async (req) => {
       if (recipientId === senderId) return json({ error: "Cannot message yourself" }, 400);
     }
 
+    // age_sec is computed by Postgres so rate-limit windows don't depend on
+    // the Edge runtime's clock agreeing with the database's.
     const [conn] = connectionId
-      ? await sql`select id, status, created_at from connections where id = ${connectionId}`
+      ? await sql`
+          select id, status, created_at,
+                 extract(epoch from (now() - created_at))::float8 as age_sec
+          from connections where id = ${connectionId}`
       : await sql`
-          select id, status, created_at from connections
+          select id, status, created_at,
+                 extract(epoch from (now() - created_at))::float8 as age_sec
+          from connections
           where (user_a_id = ${senderId} and user_b_id = ${recipientId})
              or (user_a_id = ${recipientId} and user_b_id = ${senderId})
           limit 1`;
@@ -109,13 +116,18 @@ Deno.serve(async (req) => {
     }
     connectionId = conn.id as string;
     const connectionCreatedAt = conn.created_at as string;
+    const connectionAgeSec = Number(conn.age_sec);
 
-    // --- 4. block check (either direction) ---
-    const blockRows = await sql`
-      select 1 from blocks
-      where (blocker_id = ${senderId} and blocked_id = ${recipientId})
-         or (blocker_id = ${recipientId} and blocked_id = ${senderId})
-      limit 1`;
+    // --- 4. block check (either direction) + existing-conversation lookup.
+    //     Independent of each other, so they run in parallel.
+    const [blockRows, existingConvRows] = await Promise.all([
+      sql`
+        select 1 from blocks
+        where (blocker_id = ${senderId} and blocked_id = ${recipientId})
+           or (blocker_id = ${recipientId} and blocked_id = ${senderId})
+        limit 1`,
+      sql`select id from conversations where connection_id = ${connectionId}`,
+    ]);
     if (blockRows.length > 0) {
       await writeAudit(sqlForSafety, {
         actor_id: senderId,
@@ -131,9 +143,7 @@ Deno.serve(async (req) => {
     }
 
     // Existing conversation (may be null on the very first message).
-    const [existingConv] = await sql`
-      select id from conversations where connection_id = ${connectionId}`;
-    const conversationId: string | null = existingConv?.id ?? null;
+    const conversationId: string | null = existingConvRows[0]?.id ?? null;
 
     // Recent sender bodies in this conversation (for duplicate + abuse checks).
     let recentBodies: string[] = [];
@@ -149,7 +159,7 @@ Deno.serve(async (req) => {
     // --- 5. rate limit ---
     const rate = await checkRateLimits(
       sqlForSafety,
-      { senderId, recipientId, conversationId, connectionCreatedAt },
+      { senderId, recipientId, conversationId, connectionCreatedAt, connectionAgeSec },
       recentBodies,
       body,
     );
@@ -209,6 +219,16 @@ Deno.serve(async (req) => {
 
     // deno-lint-ignore no-explicit-any
     const message = await sql.begin(async (tx: any) => {
+      // Re-check the block inside the transaction: a block committed while the
+      // safety pipeline ran (after step 4) must still stop the send. Returning
+      // null commits an empty transaction and is handled as a 403 below.
+      const blockedNow = await tx`
+        select 1 from blocks
+        where (blocker_id = ${senderId} and blocked_id = ${recipientId})
+           or (blocker_id = ${recipientId} and blocked_id = ${senderId})
+        limit 1`;
+      if (blockedNow.length > 0) return null;
+
       let convId = conversationId;
       if (!convId) {
         const [c] = await tx`
@@ -245,6 +265,20 @@ Deno.serve(async (req) => {
 
       return msg;
     });
+
+    if (!message) {
+      await writeAudit(sqlForSafety, {
+        actor_id: senderId,
+        conversation_id: conversationId,
+        message_id: null,
+        decision: "blocked_relationship",
+        filter_verdicts: { reason: "block_raced_send" },
+        rate_state: rate.state,
+        raw_excerpt: toExcerpt(body),
+      });
+      // Same generic message as the early check — never leak that a block exists.
+      return json({ error: "You can't message this user" }, 403);
+    }
 
     return json({ message }, 200);
   } catch (err) {

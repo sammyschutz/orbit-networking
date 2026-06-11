@@ -180,6 +180,7 @@
         "npm:expo-web-browser@~56.0.5",
         "npm:expo@56",
         "npm:react-dom@19.2.3",
+        "npm:react-native-gesture-handler@~2.31.1",
         "npm:react-native-reanimated@4.3.1",
         "npm:react-native-safe-area-context@5.7",
         "npm:react-native-screens@4.25.2",

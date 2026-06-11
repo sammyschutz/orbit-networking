@@ -1,6 +1,7 @@
 import {
     Connection,
     Conversation,
+    getOtherUserId,
     invokeEdgeFunction,
     isConversationUnread,
     Message,
@@ -225,9 +226,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         );
 
       const connectedUserIds =
-        connections?.flatMap((c) => [
-          c.user_a_id === currentProfile.user_id ? c.user_b_id : c.user_a_id,
-        ]) ?? [];
+        connections?.map((c) => getOtherUserId(c, currentProfile.user_id)) ??
+        [];
 
       // Exclude current user, swiped, and connected
       const excludeIds = [
@@ -358,7 +358,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       const { data, error } = await supabase
         .from("conversations")
         .select("*")
-        .order("last_message_at", { ascending: false, nullsFirst: false });
+        .order("last_message_at", { ascending: false, nullsFirst: false })
+        .limit(200);
 
       if (error) throw error;
       const conversations = (data as Conversation[]) ?? [];
@@ -472,8 +473,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     if (status === 200 && data?.message) {
       get().upsertRealtimeMessage(data.message as Message);
-      // Refresh inbox metadata (last_message_at / preview).
-      get().fetchConversations();
+      // Refresh inbox metadata (last_message_at / preview). Awaited so a brand
+      // new conversation is in the store before Chat's markConversationRead
+      // effect fires — otherwise its optimistic patch finds nothing to update.
+      await get().fetchConversations();
       return { ok: true, status, message: data.message as Message };
     }
 

@@ -25,7 +25,7 @@ import { ConnectionCard } from '@components/Card';
 import { Button } from '@components/Button';
 import { SafetyMenu } from '@components/SafetyMenu';
 import { useAppStore } from '@store/appStore';
-import { supabase, Connection, Profile } from '@services/supabase';
+import { supabase, getOtherUserId, Connection, Profile } from '@services/supabase';
 import { useNavigation, useRouter } from 'expo-router';
 
 interface ConnectionWithProfile extends Connection {
@@ -65,9 +65,7 @@ export const ConnectionsList: React.FC = () => {
       }
 
       const otherUserIds = freshConnections.map((conn) =>
-        conn.user_a_id === currentProfile.user_id
-          ? conn.user_b_id
-          : conn.user_a_id,
+        getOtherUserId(conn, currentProfile.user_id),
       );
 
       const { data: profiles, error } = await supabase
@@ -85,9 +83,7 @@ export const ConnectionsList: React.FC = () => {
       );
 
       const connectionsData = freshConnections.map((conn) => {
-        const otherUserId = conn.user_a_id === currentProfile.user_id
-          ? conn.user_b_id
-          : conn.user_a_id;
+        const otherUserId = getOtherUserId(conn, currentProfile.user_id);
 
         return {
           ...conn,
@@ -278,9 +274,7 @@ export const ConnectionDetail: React.FC<ConnectionDetailProps> = ({ connectionId
 
   const otherUserId =
     connection && currentProfile?.user_id
-      ? connection.user_a_id === currentProfile.user_id
-        ? connection.user_b_id
-        : connection.user_a_id
+      ? getOtherUserId(connection, currentProfile.user_id)
       : undefined;
 
   // Header overflow menu (Block / Report / Remove connection).
@@ -315,9 +309,7 @@ export const ConnectionDetail: React.FC<ConnectionDetailProps> = ({ connectionId
             return;
           }
 
-          const otherUserId = conn.user_a_id === currentProfile.user_id
-            ? conn.user_b_id
-            : conn.user_a_id;
+          const otherUserId = getOtherUserId(conn, currentProfile.user_id);
 
           const { data: profile } = await supabase
             .from('profiles')

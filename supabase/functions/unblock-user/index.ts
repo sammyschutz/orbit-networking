@@ -47,15 +47,19 @@ Deno.serve(async (req) => {
   // deno-lint-ignore no-explicit-any
   const sql: any = postgres(DB_URL, { prepare: false });
   try {
-    await sql`
-      delete from blocks where blocker_id = ${blockerId} and blocked_id = ${blockedId}`;
+    const deleted = await sql`
+      delete from blocks where blocker_id = ${blockerId} and blocked_id = ${blockedId}
+      returning 1`;
+    const removed = deleted.length > 0;
 
     await sql`
       insert into message_audit_log (actor_id, decision, filter_verdicts, rate_state)
-      values (${blockerId}, 'allowed',
-              ${JSON.stringify({ action: "unblock", blocked_id: blockedId })}::jsonb, '{}'::jsonb)`;
+      values (${blockerId}, 'action_unblock',
+              ${JSON.stringify({ action: "unblock", blocked_id: blockedId, removed })}::jsonb, '{}'::jsonb)`;
 
-    return json({ ok: true }, 200);
+    // Idempotent: unblocking a non-existent block still succeeds, but the
+    // response says whether anything was actually removed.
+    return json({ ok: true, removed }, 200);
   } catch (err) {
     console.error("unblock-user error", err);
     return json({ error: (err as Error).message || String(err) }, 500);

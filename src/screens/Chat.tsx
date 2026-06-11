@@ -7,7 +7,7 @@ import {
   useThemeColors,
 } from "@constants/theme";
 import { Feather } from "@expo/vector-icons";
-import { Message, Profile, supabase } from "@services/supabase";
+import { getOtherUserId, Message, Profile, supabase } from "@services/supabase";
 import { useAppStore } from "@store/appStore";
 import { useNavigation, useRouter } from "expo-router";
 import React, {
@@ -117,10 +117,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
         .eq("id", convId)
         .maybeSingle();
       if (conv) {
-        otherId =
-          conv.user_a_id === currentProfile.user_id
-            ? conv.user_b_id
-            : conv.user_a_id;
+        otherId = getOtherUserId(conv, currentProfile.user_id);
         setRecipientId(otherId);
         setConnectionId(conv.connection_id);
       }

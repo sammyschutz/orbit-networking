@@ -18,6 +18,7 @@ export interface RateContext {
   recipientId: string;
   conversationId: string | null;
   connectionCreatedAt: string; // ISO timestamp of the connection row
+  connectionAgeSec: number; // age computed by Postgres (now() - created_at)
 }
 
 export type RateReason = "global" | "conversation" | "duplicate" | "new_connection";
@@ -90,8 +91,9 @@ export async function checkRateLimits(
   }
 
   // 4. New-connection cooldown: stricter limits right after connecting, until
-  //    the other party replies once (§12-F).
-  const ageSec = (Date.now() - new Date(ctx.connectionCreatedAt).getTime()) / 1000;
+  //    the other party replies once (§12-F). The age comes from Postgres so a
+  //    skewed Edge-runtime clock can't shrink (or bypass) the window.
+  const ageSec = ctx.connectionAgeSec;
   if (ctx.conversationId && ageSec < RATE_LIMITS.newConnectionWindowSec) {
     const otherReplied = await count(
       sql,

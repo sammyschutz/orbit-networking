@@ -6,7 +6,7 @@ import {
 } from "@constants/theme";
 import { Feather } from "@expo/vector-icons";
 import { useAppStore } from "@store/appStore";
-import { ReportCategory } from "@services/supabase";
+import { REPORT_CATEGORIES, ReportCategory } from "@services/supabase";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -29,14 +29,21 @@ interface SafetyMenuProps {
   onRelationshipEnded?: () => void;
 }
 
-const REPORT_CATEGORIES: { key: ReportCategory; label: string }[] = [
-  { key: "harassment", label: "Harassment or bullying" },
-  { key: "spam", label: "Spam or scam" },
-  { key: "hate", label: "Hate speech" },
-  { key: "sexual", label: "Unwanted sexual content" },
-  { key: "threat", label: "Threats or violence" },
-  { key: "other", label: "Something else" },
-];
+// Labels for every category in REPORT_CATEGORIES; the Record type makes adding
+// a category without a label a compile error.
+const CATEGORY_LABELS: Record<ReportCategory, string> = {
+  harassment: "Harassment or bullying",
+  spam: "Spam or scam",
+  hate: "Hate speech",
+  sexual: "Unwanted sexual content",
+  threat: "Threats or violence",
+  other: "Something else",
+};
+
+const CATEGORY_OPTIONS = REPORT_CATEGORIES.map((key) => ({
+  key,
+  label: CATEGORY_LABELS[key],
+}));
 
 /**
  * Bottom-sheet safety menu reachable from a chat or a connection (spec §10).
@@ -198,7 +205,7 @@ export const SafetyMenu: React.FC<SafetyMenuProps> = ({
               <Text style={[styles.sheetTitle, { color: colors.textTertiary }]}>
                 WHY ARE YOU REPORTING?
               </Text>
-              {REPORT_CATEGORIES.map((c) => (
+              {CATEGORY_OPTIONS.map((c) => (
                 <Row
                   key={c.key}
                   icon="alert-triangle"

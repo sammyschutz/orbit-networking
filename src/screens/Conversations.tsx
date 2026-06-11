@@ -9,6 +9,7 @@ import {
 import { Feather } from "@expo/vector-icons";
 import {
   Conversation,
+  getOtherUserId,
   isConversationUnread,
   Profile,
   supabase,
@@ -178,9 +179,7 @@ export const ConversationsList: React.FC = () => {
       const convs = await fetchConversations();
       if (!convs.length) return;
 
-      const otherIds = convs.map((c) =>
-        c.user_a_id === myId ? c.user_b_id : c.user_a_id,
-      );
+      const otherIds = convs.map((c) => getOtherUserId(c, myId));
       const { data: profiles } = await supabase
         .from("profiles")
         .select("*")
@@ -204,10 +203,10 @@ export const ConversationsList: React.FC = () => {
 
   const rows = useMemo<ConversationWithProfile[]>(() => {
     if (!myId) return [];
-    return conversations.map((c) => {
-      const otherId = c.user_a_id === myId ? c.user_b_id : c.user_a_id;
-      return { ...c, profile: profilesById.get(otherId) };
-    });
+    return conversations.map((c) => ({
+      ...c,
+      profile: profilesById.get(getOtherUserId(c, myId)),
+    }));
   }, [conversations, profilesById, myId]);
 
   const onRefresh = async () => {

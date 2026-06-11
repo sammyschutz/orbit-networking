@@ -24,7 +24,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { supabase } from "../../src/services/supabase";
+import { invokeEdgeFunction, supabase } from "../../src/services/supabase";
 
 interface RowProps {
   icon: keyof typeof Feather.glyphMap;
@@ -57,38 +57,8 @@ export default function SettingsScreen() {
       });
       if (signInErr) throw signInErr;
 
-      const session = await supabase.auth.getSession();
-      const token = session.data?.session?.access_token;
-      if (!token) throw new Error("No access token");
-
-      const funcUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/delete-account`;
-      const res = await fetch(funcUrl, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          apikey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({}),
-      });
-
-      let payload: any = null;
-      let textBody: string | null = null;
-      const contentType = res.headers.get("content-type") || "";
-      if (contentType.includes("application/json")) {
-        payload = await res.json();
-      } else {
-        textBody = await res.text();
-      }
-
-      if (!res.ok) {
-        const serverMsg =
-          payload?.error ||
-          payload?.message ||
-          textBody ||
-          `${res.status} ${res.statusText}`;
-        throw new Error(`Delete failed: ${serverMsg}`);
-      }
+      const { error: deleteErr } = await invokeEdgeFunction("delete-account", {});
+      if (deleteErr) throw new Error(`Delete failed: ${deleteErr}`);
 
       await supabase.auth.signOut();
       Alert.alert("Account deleted", "Your account and data have been removed.");

@@ -117,6 +117,17 @@ export interface Conversation {
 }
 
 /**
+ * The other participant in any two-sided row (conversation, connection). Rows
+ * store the pair as user_a/user_b; this is the one place that picks "not me".
+ */
+export function getOtherUserId(
+  row: { user_a_id: string; user_b_id: string },
+  myUserId: string,
+): string {
+  return row.user_a_id === myUserId ? row.user_b_id : row.user_a_id;
+}
+
+/**
  * Whether a conversation has messages the given user hasn't read yet. True when
  * the latest message is newer than that participant's read pointer (or they have
  * never read it). The sender's pointer is advanced server-side on send, so a
@@ -155,13 +166,18 @@ export interface Block {
   created_at: string;
 }
 
-export type ReportCategory =
-  | "harassment"
-  | "spam"
-  | "hate"
-  | "sexual"
-  | "threat"
-  | "other";
+// Must stay in sync with CATEGORIES in supabase/functions/report-user/index.ts
+// (the server is the enforcing copy; this drives the client UI).
+export const REPORT_CATEGORIES = [
+  "harassment",
+  "spam",
+  "hate",
+  "sexual",
+  "threat",
+  "other",
+] as const;
+
+export type ReportCategory = (typeof REPORT_CATEGORIES)[number];
 
 /**
  * Invoke a safety Edge Function with the current user's JWT (mirrors the

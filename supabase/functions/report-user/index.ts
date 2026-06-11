@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
 
     await sql`
       insert into message_audit_log (actor_id, conversation_id, message_id, decision, filter_verdicts, rate_state)
-      values (${reporterId}, ${payload.conversation_id ?? null}, ${payload.message_id ?? null}, 'allowed',
+      values (${reporterId}, ${payload.conversation_id ?? null}, ${payload.message_id ?? null}, 'action_report',
               ${JSON.stringify({ action: "report", reported_id, category, report_id: report.id })}::jsonb, '{}'::jsonb)`;
 
     return json({ ok: true, report_id: report.id }, 200);
