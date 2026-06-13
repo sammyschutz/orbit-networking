@@ -59,6 +59,7 @@ export default function RootLayout() {
         <Stack.Screen name="auth" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         <Stack.Screen name="profile" options={{ title: "Edit profile" }} />
+        <Stack.Screen name="my-algorithm" options={{ title: "My algorithm" }} />
         <Stack.Screen name="connection/[id]" options={{ title: "Connection" }} />
         <Stack.Screen name="chat/[id]" options={{ title: "Chat" }} />
         <Stack.Screen

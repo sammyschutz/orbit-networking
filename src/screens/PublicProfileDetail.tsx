@@ -1,4 +1,5 @@
 import { Button } from "@components/Button";
+import { HandshakeOverlay } from "@components/HandshakeOverlay";
 import {
     createStyles,
     gradients,
@@ -6,8 +7,7 @@ import {
     typography,
     useThemeColors,
 } from "@constants/theme";
-import { Feather } from "@expo/vector-icons";
-import { Profile, supabase } from "@services/supabase";
+import { Interest, Profile, supabase } from "@services/supabase";
 import { useAppStore } from "@store/appStore";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -35,18 +35,25 @@ export const PublicProfileDetail: React.FC<PublicProfileDetailProps> = ({
   const styles = createStyles(colors);
   const router = useRouter();
   const {
+    currentProfile,
     submitSwipe,
-    markNotificationRead,
     fetchCandidates,
     fetchConnections,
+    myInterestIds,
+    fetchAlgorithm,
   } = useAppStore();
 
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [theirInterests, setTheirInterests] = useState<Interest[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<"like" | "pass" | null>(
     null,
   );
   const [resultText, setResultText] = useState<string | null>(null);
+  const [connected, setConnected] = useState(false);
+  const [handshake, setHandshake] = useState<{
+    connectionId: string | null;
+  } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -79,6 +86,36 @@ export const PublicProfileDetail: React.FC<PublicProfileDetailProps> = ({
     };
   }, [userId]);
 
+  // Their interest chips, with the viewer's selections for shared-highlighting
+  // (interests are public — discover-algorithm spec §11-D).
+  useEffect(() => {
+    let active = true;
+
+    supabase
+      .from("user_interests")
+      .select("interests(*)")
+      .eq("user_id", userId)
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) {
+          console.error("Failed to load interests:", error);
+          return;
+        }
+        const interests = ((data as any[]) ?? [])
+          .map((row) => row.interests as Interest | null)
+          .filter((i): i is Interest => !!i)
+          .sort((a, b) => a.name.localeCompare(b.name));
+        setTheirInterests(interests);
+      });
+
+    if (currentProfile?.user_id) fetchAlgorithm();
+
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
+
   const handleSwipe = async (direction: "like" | "pass") => {
     if (!profile || actionLoading) return;
 
@@ -86,20 +123,21 @@ export const PublicProfileDetail: React.FC<PublicProfileDetailProps> = ({
     setResultText(null);
 
     try {
+      // submit_swipe marks the pending incoming_interest notification read on
+      // both responses, so no client-side dismissal is needed.
       const result = await submitSwipe(profile.user_id, direction);
-      if (notificationId) {
-        await markNotificationRead(notificationId);
-      }
 
       await fetchCandidates();
 
       if (direction === "like" && result?.is_match) {
         await fetchConnections();
-        setResultText(`You and ${profile.display_name} are connected.`);
+        setConnected(true);
+        setHandshake({ connectionId: result.connection_id ?? null });
+        setResultText(`You and ${profile.display_name} shook hands.`);
       } else if (direction === "like") {
-        setResultText("Interest sent.");
+        setResultText(`You extended a hand to ${profile.display_name} 👋`);
       } else {
-        setResultText("Profile passed.");
+        setResultText("Maybe later — they may cross your path again.");
       }
     } catch (err) {
       const message =
@@ -108,6 +146,22 @@ export const PublicProfileDetail: React.FC<PublicProfileDetailProps> = ({
     } finally {
       setActionLoading(null);
     }
+  };
+
+  const handleSayHello = () => {
+    if (!profile) return;
+    const connectionId = handshake?.connectionId;
+    setHandshake(null);
+    router.push({
+      pathname: "/chat/[id]",
+      params: {
+        id: "new",
+        recipientId: profile.user_id,
+        connectionId: connectionId ?? "",
+        name: profile.display_name,
+        photo: profile.photo_url ?? "",
+      },
+    });
   };
 
   if (loading) {
@@ -193,10 +247,14 @@ export const PublicProfileDetail: React.FC<PublicProfileDetailProps> = ({
             style={StyleSheet.absoluteFill}
             pointerEvents="none"
           />
-          <View style={localStyles.interestBadge}>
-            <Feather name="heart" size={12} color="#FFFFFF" />
-            <Text style={localStyles.interestBadgeText}>Wants to connect</Text>
-          </View>
+          {notificationId ? (
+            <View style={localStyles.interestBadge}>
+              <Text style={localStyles.interestBadgeEmoji}>👋</Text>
+              <Text style={localStyles.interestBadgeText}>
+                Extended a hand to you
+              </Text>
+            </View>
+          ) : null}
           <View style={localStyles.heroInfo}>
             <Text style={localStyles.heroName} numberOfLines={1}>
               {profile.display_name}
@@ -223,6 +281,47 @@ export const PublicProfileDetail: React.FC<PublicProfileDetailProps> = ({
           {profile.bio}
         </Text>
 
+        {theirInterests.length > 0 ? (
+          <View style={localStyles.interestsBlock}>
+            <Text
+              style={[
+                typography.label,
+                { color: colors.textPrimary, marginBottom: spacing.sm },
+              ]}
+            >
+              Into
+            </Text>
+            <View style={localStyles.interestChipWrap}>
+              {theirInterests.map((interest) => {
+                const shared = myInterestIds.includes(interest.id);
+                return (
+                  <View
+                    key={interest.id}
+                    style={[
+                      localStyles.interestChip,
+                      {
+                        backgroundColor: shared
+                          ? colors.primary
+                          : colors.surfaceInput,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        localStyles.interestChipText,
+                        { color: shared ? "#FFFFFF" : colors.textPrimary },
+                      ]}
+                    >
+                      {shared ? "✦ " : ""}
+                      {interest.name}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
+
         <View style={localStyles.prompts}>
           <PromptRow label="Ask me about" value={profile.ask_me_about} />
           <PromptRow label="Learning about" value={profile.learning_about} />
@@ -246,7 +345,7 @@ export const PublicProfileDetail: React.FC<PublicProfileDetailProps> = ({
           </View>
         )}
 
-        {resultText?.includes("connected") ? (
+        {connected ? (
           <Button
             title="View connections"
             onPress={() => router.replace("/(tabs)/connections")}
@@ -254,15 +353,15 @@ export const PublicProfileDetail: React.FC<PublicProfileDetailProps> = ({
         ) : (
           <View style={localStyles.actions}>
             <Button
-              title="Pass"
-              variant="danger"
+              title="Maybe later"
+              variant="secondary"
               onPress={() => handleSwipe("pass")}
               loading={actionLoading === "pass"}
               disabled={!!actionLoading}
               style={localStyles.actionButton}
             />
             <Button
-              title="Like"
+              title={notificationId ? "Shake hands" : "Extend a hand"}
               onPress={() => handleSwipe("like")}
               loading={actionLoading === "like"}
               disabled={!!actionLoading}
@@ -271,6 +370,17 @@ export const PublicProfileDetail: React.FC<PublicProfileDetailProps> = ({
           </View>
         )}
       </ScrollView>
+
+      <HandshakeOverlay
+        visible={!!handshake}
+        myName={currentProfile?.display_name ?? "You"}
+        myPhoto={currentProfile?.photo_url}
+        theirName={profile.display_name}
+        theirPhoto={profile.photo_url}
+        onSayHello={handleSayHello}
+        onDismiss={() => setHandshake(null)}
+        dismissLabel="Keep discovering"
+      />
     </SafeAreaView>
   );
 };
@@ -376,10 +486,30 @@ const localStyles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: "rgba(236,72,153,0.92)",
   },
+  interestBadgeEmoji: {
+    fontSize: 13,
+  },
   interestBadgeText: {
     color: "#FFFFFF",
     fontSize: 12,
     fontWeight: "700",
+  },
+  interestsBlock: {
+    marginTop: spacing.xl,
+  },
+  interestChipWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+  },
+  interestChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  interestChipText: {
+    fontSize: 13,
+    fontWeight: "600",
   },
   prompts: {
     marginTop: spacing.xl,

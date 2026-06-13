@@ -1,11 +1,18 @@
-import { Feather } from "@expo/vector-icons";
+import { Avatar } from "@components/Avatar";
 import { spacing, typography, useThemeColors } from "@constants/theme";
+import { Feather } from "@expo/vector-icons";
 import { Notification, Profile, supabase } from "@services/supabase";
 import { useAppStore } from "@store/appStore";
 import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+/**
+ * Discover banner (handshake spec §4.1). Pending extended hands are
+ * first-class: the row shows who is waiting and how many, and tapping it
+ * opens their profile to respond ("Shake hands" / "Maybe later"). Falls back
+ * to a "You shook hands!" row for an unread connect that happened while away.
+ */
 export const NotificationsBanner: React.FC = () => {
   const colors = useThemeColors();
   const router = useRouter();
@@ -23,13 +30,24 @@ export const NotificationsBanner: React.FC = () => {
     }
   }, [currentProfile?.user_id, fetchNotifications]);
 
-  const unreadNotification = useMemo(
-    () => notifications.find((notification) => !notification.read_at) ?? null,
+  // Newest-first order comes from the store query.
+  const pendingHands = useMemo(
+    () =>
+      notifications.filter(
+        (n) => n.type === "incoming_interest" && !n.read_at,
+      ),
+    [notifications],
+  );
+  const unreadMatch = useMemo(
+    () => notifications.find((n) => n.type === "match" && !n.read_at) ?? null,
     [notifications],
   );
 
+  const activeNotification: Notification | null =
+    pendingHands[0] ?? unreadMatch;
+
   useEffect(() => {
-    if (!unreadNotification?.source_user_id) {
+    if (!activeNotification?.source_user_id) {
       setSourceProfile(null);
       return;
     }
@@ -54,63 +72,86 @@ export const NotificationsBanner: React.FC = () => {
       setSourceProfile((data as Profile | null) ?? null);
     };
 
-    loadSourceProfile(unreadNotification);
+    loadSourceProfile(activeNotification);
 
     return () => {
       active = false;
     };
-  }, [unreadNotification?.id, unreadNotification?.source_user_id]);
+  }, [activeNotification?.id, activeNotification?.source_user_id]);
 
-  if (!unreadNotification) return null;
+  if (!activeNotification) return null;
 
-  const isMatch = unreadNotification.type === "match";
-  const title = isMatch ? "New match" : "Someone wants to connect";
-  const detail = sourceProfile
-    ? `${sourceProfile.display_name} · ${sourceProfile.role_title}`
-    : "Open the profile to take a look.";
+  const isHands = pendingHands.length > 0;
+  const sourceName = sourceProfile?.display_name;
 
-  const handleView = () => {
-    const connectionId = unreadNotification.payload?.connection_id;
+  let title: string;
+  let detail: string;
+  if (isHands) {
+    if (pendingHands.length > 1) {
+      title = `${pendingHands.length} people extended a hand to you`;
+      detail = "Tap to respond";
+    } else {
+      title = sourceName
+        ? `${sourceName} extended a hand to you`
+        : "Someone extended a hand to you";
+      detail = sourceProfile?.role_title ?? "Tap to respond";
+    }
+  } else {
+    title = "You shook hands!";
+    detail = sourceProfile
+      ? `${sourceProfile.display_name} · ${sourceProfile.role_title}`
+      : "Open to say hello.";
+  }
 
-    if (isMatch && typeof connectionId === "string") {
+  const handleOpen = () => {
+    if (isHands) {
       router.push({
-        pathname: "/connection/[id]",
-        params: { id: connectionId },
+        pathname: "/public-profile/[userId]",
+        params: {
+          userId: activeNotification.source_user_id,
+          notificationId: activeNotification.id,
+        },
       });
       return;
     }
 
-    router.push({
-      pathname: "/public-profile/[userId]",
-      params: {
-        userId: unreadNotification.source_user_id,
-        notificationId: unreadNotification.id,
-      },
-    });
+    const connectionId = unreadMatch?.payload?.connection_id;
+    if (typeof connectionId === "string") {
+      router.push({
+        pathname: "/connection/[id]",
+        params: { id: connectionId },
+      });
+    }
   };
 
   return (
-    <View
-      style={[
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      onPress={handleOpen}
+      style={({ pressed }) => [
         styles.banner,
         {
           backgroundColor: colors.surfaceCard,
           borderColor: colors.border,
+          opacity: pressed ? 0.85 : 1,
         },
       ]}
     >
-      <View
-        style={[
-          styles.iconBadge,
-          { backgroundColor: isMatch ? colors.success : colors.primary },
-        ]}
-      >
-        <Feather
-          name={isMatch ? "zap" : "heart"}
-          size={16}
-          color="#FFFFFF"
+      {isHands && sourceProfile ? (
+        <Avatar
+          uri={sourceProfile.photo_url}
+          name={sourceProfile.display_name}
+          size={36}
+          radius={14}
         />
-      </View>
+      ) : (
+        <View
+          style={[styles.iconBadge, { backgroundColor: colors.surfaceInput }]}
+        >
+          <Text style={styles.iconEmoji}>{isHands ? "👋" : "🤝"}</Text>
+        </View>
+      )}
 
       <View style={styles.copy}>
         <Text
@@ -127,22 +168,12 @@ export const NotificationsBanner: React.FC = () => {
         </Text>
       </View>
 
-      <View style={styles.actions}>
-        <Pressable
-          accessibilityLabel="View notification"
-          accessibilityRole="button"
-          onPress={handleView}
-          style={({ pressed }) => [
-            styles.iconButton,
-            { opacity: pressed ? 0.75 : 1 },
-          ]}
-        >
-          <Feather name="eye" size={18} color={colors.primary} />
-        </Pressable>
+      {/* An extended hand awaits a response — no dismiss, just respond. */}
+      {!isHands && unreadMatch ? (
         <Pressable
           accessibilityLabel="Dismiss notification"
           accessibilityRole="button"
-          onPress={() => markNotificationRead(unreadNotification.id)}
+          onPress={() => markNotificationRead(unreadMatch.id)}
           style={({ pressed }) => [
             styles.iconButton,
             { opacity: pressed ? 0.75 : 1 },
@@ -150,8 +181,10 @@ export const NotificationsBanner: React.FC = () => {
         >
           <Feather name="x" size={18} color={colors.textSecondary} />
         </Pressable>
-      </View>
-    </View>
+      ) : (
+        <Feather name="chevron-right" size={20} color={colors.textTertiary} />
+      )}
+    </Pressable>
   );
 };
 
@@ -169,18 +202,17 @@ const styles = StyleSheet.create({
   },
   iconBadge: {
     alignItems: "center",
-    borderRadius: 18,
+    borderRadius: 14,
     height: 36,
     justifyContent: "center",
     width: 36,
   },
+  iconEmoji: {
+    fontSize: 18,
+  },
   copy: {
     flex: 1,
     minWidth: 0,
-  },
-  actions: {
-    flexDirection: "row",
-    gap: spacing.xs,
   },
   iconButton: {
     alignItems: "center",

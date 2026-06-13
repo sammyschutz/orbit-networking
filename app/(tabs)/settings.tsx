@@ -12,7 +12,7 @@ import { useAuth } from "@hooks/useAuth";
 import { useAppStore } from "@store/appStore";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Alert,
   Modal,
@@ -42,20 +42,48 @@ export default function SettingsScreen() {
 
   const [modalVisible, setModalVisible] = useState(false);
   const [password, setPassword] = useState("");
+  const [confirmText, setConfirmText] = useState("");
   const [loading, setLoading] = useState(false);
+  // null = still resolving. A user has a password only if they have an "email"
+  // identity; OAuth-only users (e.g. Google) have nothing to re-enter, so we
+  // confirm intent with a typed phrase instead of password re-auth.
+  const [hasPassword, setHasPassword] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      const identities = data?.user?.identities ?? [];
+      setHasPassword(identities.some((i) => i.provider === "email"));
+    });
+  }, []);
+
+  const usesPassword = hasPassword !== false; // default to password until known
+  const DELETE_PHRASE = "DELETE";
+  const canDelete = usesPassword
+    ? password.length > 0
+    : confirmText.trim().toUpperCase() === DELETE_PHRASE;
+
+  const resetModal = () => {
+    setModalVisible(false);
+    setPassword("");
+    setConfirmText("");
+  };
 
   const confirmDelete = async () => {
     setLoading(true);
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      const email = userData?.user?.email;
-      if (!email) throw new Error("No email for current user");
+      // Password users re-authenticate; OAuth users are gated by the typed
+      // confirmation (enforced via canDelete) since they have no password.
+      if (usesPassword) {
+        const { data: userData } = await supabase.auth.getUser();
+        const email = userData?.user?.email;
+        if (!email) throw new Error("No email for current user");
 
-      const { error: signInErr } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (signInErr) throw signInErr;
+        const { error: signInErr } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (signInErr) throw new Error("Incorrect password. Please try again.");
+      }
 
       const { error: deleteErr } = await invokeEdgeFunction("delete-account", {});
       if (deleteErr) throw new Error(`Delete failed: ${deleteErr}`);
@@ -68,8 +96,7 @@ export default function SettingsScreen() {
       Alert.alert("Error", err.message || String(err));
     } finally {
       setLoading(false);
-      setModalVisible(false);
-      setPassword("");
+      resetModal();
     }
   };
 
@@ -154,6 +181,11 @@ export default function SettingsScreen() {
             onPress={() => router.push("/profile")}
           />
           <Row
+            icon="sliders"
+            label="My algorithm"
+            onPress={() => router.push("/my-algorithm")}
+          />
+          <Row
             icon="log-out"
             label="Sign out"
             tint={colors.textSecondary}
@@ -184,39 +216,58 @@ export default function SettingsScreen() {
               Delete account?
             </Text>
             <Text style={[styles.modalHelp, { color: colors.textSecondary }]}>
-              This permanently removes your profile, swipes, and connections.
-              Re-enter your password to confirm.
+              This permanently removes your profile, discovery activity, and connections.
+              {usesPassword
+                ? " Re-enter your password to confirm."
+                : ` Type ${DELETE_PHRASE} to confirm.`}
             </Text>
-            <TextInput
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              placeholder="Password"
-              placeholderTextColor={colors.textTertiary}
-              style={[
-                styles.input,
-                {
-                  backgroundColor: colors.surfaceInput,
-                  borderColor: colors.border,
-                  color: colors.textPrimary,
-                },
-              ]}
-              autoCapitalize="none"
-            />
+            {usesPassword ? (
+              <TextInput
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                placeholder="Password"
+                placeholderTextColor={colors.textTertiary}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.surfaceInput,
+                    borderColor: colors.border,
+                    color: colors.textPrimary,
+                  },
+                ]}
+                autoCapitalize="none"
+              />
+            ) : (
+              <TextInput
+                value={confirmText}
+                onChangeText={setConfirmText}
+                placeholder={DELETE_PHRASE}
+                placeholderTextColor={colors.textTertiary}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.surfaceInput,
+                    borderColor: colors.border,
+                    color: colors.textPrimary,
+                  },
+                ]}
+                autoCapitalize="characters"
+                autoCorrect={false}
+              />
+            )}
             <View style={styles.modalActions}>
               <Button
                 title="Cancel"
                 variant="secondary"
-                onPress={() => {
-                  setModalVisible(false);
-                  setPassword("");
-                }}
+                onPress={resetModal}
                 style={styles.modalButton}
               />
               <Button
                 title="Delete"
                 variant="danger"
                 loading={loading}
+                disabled={!canDelete}
                 onPress={confirmDelete}
                 style={styles.modalButton}
               />

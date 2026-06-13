@@ -65,6 +65,73 @@ export interface Profile {
   is_complete: boolean;
   created_at: string;
   updated_at: string;
+  // Self-reported city (always a city centroid, never a device location).
+  city_id?: string | null;
+  // Transparency payload — present only on rows returned by the
+  // get_discover_candidates RPC, so Discover can show *why* someone appeared.
+  city_label?: string | null;
+  shared_interests?: string[] | null;
+  distance_miles?: number | null;
+  is_nearby?: boolean;
+  is_same_city?: boolean;
+}
+
+// --- "My algorithm" discover tuning (zap-discover-algorithm-spec.md) ----------
+
+export interface Interest {
+  id: string;
+  name: string;
+  curated: boolean;
+  created_at?: string;
+}
+
+export interface City {
+  id: string;
+  name: string;
+  ascii_name: string;
+  region: string | null;
+  country: string;
+  lat: number;
+  lng: number;
+  population: number | null;
+}
+
+export interface DiscoverySettings {
+  user_id: string;
+  nearby_only: boolean;
+  nearby_radius_miles: number;
+  updated_at?: string;
+}
+
+export const NEARBY_RADIUS_OPTIONS = [10, 25, 50, 100] as const;
+export const MAX_INTERESTS = 10;
+
+/** "Austin, TX" / "Berlin · DE" style display label for a picked city. */
+export function formatCityLabel(city: City): string {
+  return city.region ? `${city.name}, ${city.region}` : `${city.name} · ${city.country}`;
+}
+
+/**
+ * Typeahead against the cities lookup table: prefix match on the display name
+ * or its unaccented variant, biggest cities first.
+ */
+export async function searchCities(query: string, limit = 8): Promise<City[]> {
+  // Quotes/commas/wildcards would break the PostgREST `or=` syntax.
+  const q = query.trim().replace(/["%_,()]/g, "");
+  if (q.length < 2) return [];
+
+  const { data, error } = await supabase
+    .from("cities")
+    .select("*")
+    .or(`name.ilike."${q}%",ascii_name.ilike."${q}%"`)
+    .order("population", { ascending: false, nullsFirst: false })
+    .limit(limit);
+
+  if (error) {
+    console.error("City search failed:", error);
+    return [];
+  }
+  return (data as City[]) ?? [];
 }
 
 export interface Swipe {

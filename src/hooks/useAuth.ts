@@ -1,6 +1,43 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@services/supabase';
 import { Session, User } from '@supabase/supabase-js';
+import { makeRedirectUri } from 'expo-auth-session';
+import * as QueryParams from 'expo-auth-session/build/QueryParams';
+import * as WebBrowser from 'expo-web-browser';
+
+// Required so the auth popup can complete the flow on web. No-op on native.
+WebBrowser.maybeCompleteAuthSession();
+
+// Deep-link the provider redirects back to. Resolves to `zapfresh://` in a
+// dev/standalone build (the app.json scheme) and the Expo proxy in Expo Go.
+const oauthRedirectTo = makeRedirectUri();
+
+/**
+ * Turn the redirect URL handed back by the provider into a Supabase session.
+ * Supports both the PKCE flow (`?code=`, the supabase-js default) and the
+ * implicit token flow (`access_token`/`refresh_token`).
+ */
+const createSessionFromUrl = async (url: string): Promise<Session | null> => {
+  const { params, errorCode } = QueryParams.getQueryParams(url);
+  if (errorCode) throw new Error(errorCode);
+
+  const { access_token, refresh_token, code } = params;
+
+  if (code) {
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) throw error;
+    return data.session;
+  }
+
+  if (!access_token) return null;
+
+  const { data, error } = await supabase.auth.setSession({
+    access_token,
+    refresh_token,
+  });
+  if (error) throw error;
+  return data.session;
+};
 
 /**
  * Hook to manage Supabase auth session and user state
@@ -77,6 +114,38 @@ export const useAuth = () => {
     }
   };
 
+  /**
+   * Launch the Google OAuth flow in an in-app browser and establish a session
+   * from the redirect. Returns the session on success, or `null` if the user
+   * dismissed the browser without completing sign-in.
+   */
+  const signInWithGoogle = async (): Promise<Session | null> => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: oauthRedirectTo, skipBrowserRedirect: true },
+      });
+      if (error) throw error;
+
+      const result = await WebBrowser.openAuthSessionAsync(
+        data?.url ?? '',
+        oauthRedirectTo,
+      );
+
+      if (result.type !== 'success') return null; // user cancelled/dismissed
+      return await createSessionFromUrl(result.url);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Google sign-in failed';
+      setError(message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const signOut = async () => {
     try {
       setLoading(true);
@@ -100,6 +169,7 @@ export const useAuth = () => {
     error,
     signUp,
     signIn,
+    signInWithGoogle,
     signOut,
     isAuthenticated: !!session,
   };

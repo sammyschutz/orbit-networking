@@ -1,3 +1,4 @@
+import { CityTypeahead, InterestChips } from "@components/AlgorithmInputs";
 import { Button } from "@components/Button";
 import { TextInput } from "@components/TextInput";
 import {
@@ -8,11 +9,20 @@ import {
     useThemeColors,
 } from "@constants/theme";
 import { useAuth } from "@hooks/useAuth";
-import { Profile, supabase, SUPABASE_BUCKET } from "@services/supabase";
+import {
+    City,
+    Interest,
+    MAX_INTERESTS,
+    Profile,
+    supabase,
+    SUPABASE_BUCKET,
+} from "@services/supabase";
 import { useAppStore } from "@store/appStore";
 import * as ImagePicker from "expo-image-picker";
-import React, { useState } from "react";
+import { useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
+    Alert,
     Image,
     KeyboardAvoidingView,
     Platform,
@@ -36,11 +46,15 @@ const EXPERIENCE_LEVELS = [
   "founder",
 ] as const;
 
+const ONBOARDING_STEPS = ["basic", "algorithm", "photo", "prompts"] as const;
+type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
+
 /**
  * Profile onboarding flow
  * 1. Basic info (name, role, industry, experience level, bio)
- * 2. Photo upload
- * 3. Optional prompts (ask_me_about, learning_about, side_project)
+ * 2. Build your algorithm (interests + city — skippable)
+ * 3. Photo upload
+ * 4. Optional prompts (ask_me_about, learning_about, side_project)
  */
 export const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({
   onComplete,
@@ -48,12 +62,38 @@ export const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({
   const colors = useThemeColors();
   const styles = createStyles(colors);
 
-  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
+  const { user, loading: authLoading, signOut } = useAuth();
   const { currentProfile, updateProfile, profileLoading } = useAppStore();
 
-  const [step, setStep] = useState<"basic" | "photo" | "prompts">("basic");
+  const [step, setStep] = useState<OnboardingStep>("basic");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // "Build your algorithm" step — held locally and written on completion,
+  // since the profile row doesn't exist until the final save.
+  const [curatedInterests, setCuratedInterests] = useState<Interest[]>([]);
+  const [selectedInterestIds, setSelectedInterestIds] = useState<string[]>([]);
+  const [selectedCity, setSelectedCity] = useState<City | null>(null);
+
+  useEffect(() => {
+    supabase
+      .from("interests")
+      .select("*")
+      .eq("curated", true)
+      .order("name")
+      .then(({ data }) => setCuratedInterests((data as Interest[]) ?? []));
+  }, []);
+
+  const toggleOnboardingInterest = (interest: Interest) => {
+    setSelectedInterestIds((ids) =>
+      ids.includes(interest.id)
+        ? ids.filter((id) => id !== interest.id)
+        : ids.length >= MAX_INTERESTS
+          ? ids
+          : [...ids, interest.id],
+    );
+  };
 
   // Basic info
   const [displayName, setDisplayName] = useState(
@@ -140,6 +180,13 @@ export const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({
         return;
       }
       setError("");
+      setStep("algorithm");
+      return;
+    }
+
+    if (step === "algorithm") {
+      // Skippable by design — the algorithm works untuned.
+      setError("");
       setStep("photo");
       return;
     }
@@ -187,10 +234,29 @@ export const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({
           ask_me_about: askMeAbout || null,
           learning_about: learningAbout || null,
           side_project: sideProject || null,
+          city_id: selectedCity?.id ?? null,
           is_complete: true,
         };
 
         await updateProfile(updates);
+
+        // Interest selections from the algorithm step. Non-fatal: the profile
+        // is complete either way, and they can re-pick in My Algorithm.
+        if (selectedInterestIds.length > 0) {
+          const { error: interestsError } = await supabase
+            .from("user_interests")
+            .upsert(
+              selectedInterestIds.map((interest_id) => ({
+                user_id: user.id,
+                interest_id,
+              })),
+              { onConflict: "user_id,interest_id", ignoreDuplicates: true },
+            );
+          if (interestsError) {
+            console.error("Failed to save interests:", interestsError);
+          }
+        }
+
         onComplete?.();
       } catch (err) {
         const message =
@@ -205,11 +271,30 @@ export const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({
   };
 
   const handleBack = () => {
-    if (step === "photo") {
-      setStep("basic");
-    } else if (step === "prompts") {
-      setStep("photo");
-    }
+    const index = ONBOARDING_STEPS.indexOf(step);
+    if (index > 0) setStep(ONBOARDING_STEPS[index - 1]);
+  };
+
+  // Escape hatch: onboarding is otherwise a dead-end if you land here by
+  // mistake (wrong account, a stale session that looks incomplete). Signing
+  // out returns to the login screen; _layout's auth listener handles the nav,
+  // and we replace explicitly as a fallback.
+  const handleSignOut = () => {
+    Alert.alert("Sign out?", "You'll return to the login screen.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Sign out",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await signOut();
+            router.replace("/auth");
+          } catch (err: any) {
+            Alert.alert("Error", err?.message || "Failed to sign out");
+          }
+        },
+      },
+    ]);
   };
 
   return (
@@ -224,17 +309,30 @@ export const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({
           contentContainerStyle={localStyles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
+          {/* Escape hatch — onboarding has no tabs/Settings to reach. */}
+          <View style={localStyles.topBar}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Sign out"
+              onPress={handleSignOut}
+              hitSlop={8}
+            >
+              <Text style={[typography.label, { color: colors.textSecondary }]}>
+                Sign out
+              </Text>
+            </Pressable>
+          </View>
+
           {/* Progress indicator */}
           <View style={localStyles.progressContainer}>
-            {(["basic", "photo", "prompts"] as const).map((s, idx) => (
+            {ONBOARDING_STEPS.map((s, idx) => (
               <View
                 key={s}
                 style={[
                   localStyles.progressStep,
                   {
                     backgroundColor:
-                      step === s ||
-                      ["basic", "photo", "prompts"].indexOf(step) > idx
+                      step === s || ONBOARDING_STEPS.indexOf(step) > idx
                         ? colors.primary
                         : colors.surfaceInput,
                   },
@@ -344,6 +442,73 @@ export const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({
                   {error}
                 </Text>
               )}
+            </View>
+          )}
+
+          {/* Build your algorithm step (skippable) */}
+          {step === "algorithm" && (
+            <View style={localStyles.stepContent}>
+              <Text
+                style={[
+                  typography.headline,
+                  {
+                    color: colors.textPrimary,
+                    marginBottom: spacing.sm,
+                  },
+                ]}
+              >
+                Build your algorithm
+              </Text>
+              <Text
+                style={[
+                  typography.body,
+                  {
+                    color: colors.textSecondary,
+                    marginBottom: spacing.lg,
+                  },
+                ]}
+              >
+                Pick what you're into and where you are — Discover puts people
+                who match first. You can tune this any time.
+              </Text>
+
+              <View style={localStyles.algorithmHeader}>
+                <Text style={[typography.label, { color: colors.textPrimary }]}>
+                  Your interests
+                </Text>
+                <Text
+                  style={[typography.caption, { color: colors.textTertiary }]}
+                >
+                  {selectedInterestIds.length} of {MAX_INTERESTS}
+                </Text>
+              </View>
+              <InterestChips
+                interests={curatedInterests}
+                selectedIds={selectedInterestIds}
+                onToggle={toggleOnboardingInterest}
+              />
+
+              <Text
+                style={[
+                  typography.label,
+                  {
+                    color: colors.textPrimary,
+                    marginTop: spacing.xl,
+                    marginBottom: spacing.sm,
+                  },
+                ]}
+              >
+                Your city
+              </Text>
+              <CityTypeahead value={selectedCity} onSelect={setSelectedCity} />
+              <Text
+                style={[
+                  typography.caption,
+                  { color: colors.textTertiary, marginTop: spacing.sm },
+                ]}
+              >
+                We only know the city you tell us — never your location.
+              </Text>
             </View>
           )}
 
@@ -495,7 +660,15 @@ export const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({
               <Button title="Back" onPress={handleBack} variant="secondary" />
             )}
             <Button
-              title={step === "prompts" ? "Complete profile" : "Continue"}
+              title={
+                step === "prompts"
+                  ? "Complete profile"
+                  : step === "algorithm" &&
+                      !selectedInterestIds.length &&
+                      !selectedCity
+                    ? "Skip for now"
+                    : "Continue"
+              }
               onPress={handleContinue}
               loading={loading}
               disabled={loading || profileLoading || authLoading}
@@ -512,6 +685,11 @@ const localStyles = StyleSheet.create({
     flexGrow: 1,
     paddingVertical: spacing.xl,
   },
+  topBar: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginBottom: spacing.lg,
+  },
   progressContainer: {
     flexDirection: "row",
     gap: spacing.sm,
@@ -524,6 +702,12 @@ const localStyles = StyleSheet.create({
   },
   stepContent: {
     marginBottom: spacing.xl,
+  },
+  algorithmHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.md,
   },
   levelSelector: {
     flexDirection: "row",

@@ -1,4 +1,5 @@
 import { Button } from "@components/Button";
+import { GoogleAuthButton } from "@components/GoogleAuthButton";
 import { TextInput } from "@components/TextInput";
 import {
     createStyles,
@@ -72,8 +73,9 @@ export const LoginScreen: React.FC<AuthScreenProps> = ({
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
-  const { signIn } = useAuth();
+  const { signIn, signInWithGoogle } = useAuth();
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -91,6 +93,20 @@ export const LoginScreen: React.FC<AuthScreenProps> = ({
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // On success the root layout's auth listener handles navigation, so we only
+  // need to surface errors here. A dismissed browser resolves without throwing.
+  const handleGoogle = async () => {
+    setError("");
+    setGoogleLoading(true);
+    try {
+      await signInWithGoogle();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Google sign-in failed");
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -156,8 +172,15 @@ export const LoginScreen: React.FC<AuthScreenProps> = ({
               title="Sign In"
               onPress={handleLogin}
               loading={loading}
-              disabled={loading}
+              disabled={loading || googleLoading}
             />
+            <View style={localStyles.socialSpacer}>
+              <GoogleAuthButton
+                onPress={handleGoogle}
+                loading={googleLoading}
+                disabled={loading}
+              />
+            </View>
           </View>
 
           {/* Footer */}
@@ -208,8 +231,9 @@ export const SignUpScreen: React.FC<AuthScreenProps> = ({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
-  const { signUp } = useAuth();
+  const { signUp, signInWithGoogle } = useAuth();
 
   const handleSignUp = async () => {
     if (!email || !password || !confirmPassword) {
@@ -237,6 +261,20 @@ export const SignUpScreen: React.FC<AuthScreenProps> = ({
       setError(err instanceof Error ? err.message : "Sign up failed");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Google sign-in doubles as sign-up; the root layout's auth listener routes
+  // new users into onboarding once the session is established.
+  const handleGoogle = async () => {
+    setError("");
+    setGoogleLoading(true);
+    try {
+      await signInWithGoogle();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Google sign-in failed");
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -310,8 +348,15 @@ export const SignUpScreen: React.FC<AuthScreenProps> = ({
               title="Create Account"
               onPress={handleSignUp}
               loading={loading}
-              disabled={loading}
+              disabled={loading || googleLoading}
             />
+            <View style={localStyles.socialSpacer}>
+              <GoogleAuthButton
+                onPress={handleGoogle}
+                loading={googleLoading}
+                disabled={loading}
+              />
+            </View>
           </View>
 
           {/* Footer */}
@@ -381,6 +426,9 @@ const localStyles = StyleSheet.create({
   },
   actions: {
     marginBottom: spacing.xl,
+  },
+  socialSpacer: {
+    marginTop: spacing.lg,
   },
   footer: {
     alignItems: "center",

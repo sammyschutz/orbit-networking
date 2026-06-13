@@ -1,6 +1,5 @@
 import { Avatar } from "@components/Avatar";
 import {
-  avatarGradient,
   borderRadius,
   elevation,
   gradients,
@@ -9,10 +8,10 @@ import {
   useThemeColors,
 } from "@constants/theme";
 import { Feather } from "@expo/vector-icons";
-import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useState } from "react";
+import React from "react";
 import {
+  Pressable,
   StyleProp,
   StyleSheet,
   Text,
@@ -65,15 +64,21 @@ interface ProfileCardProps {
   bio?: string;
   prompt?: string;
   experience?: string;
+  // "Why you're seeing them" transparency payload (discover-algorithm spec §7).
+  sharedInterests?: string[] | null;
+  distanceMiles?: number | null;
+  isNearby?: boolean;
+  isSameCity?: boolean;
+  onPress?: () => void;
   style?: StyleProp<ViewStyle>;
   testID?: string;
 }
 
 /**
- * Full-bleed profile card for the discovery deck.
- * Photo fills the whole card with a gradient scrim; details sit over the
- * bottom of the image. Falls back to a colorful gradient + initial when the
- * photo is missing or fails to load.
+ * Info-first profile card for Discover (handshake revamp §5).
+ * The person's role, bio, and conversation prompt lead; the photo is a
+ * 72px avatar beside the name. Tapping the card opens the full profile,
+ * where the larger photo lives.
  */
 export const ProfileCard: React.FC<ProfileCardProps> = ({
   image,
@@ -83,84 +88,161 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
   bio,
   prompt,
   experience,
+  sharedInterests,
+  distanceMiles,
+  isNearby,
+  isSameCity,
+  onPress,
   style,
   testID,
 }) => {
-  const [imgFailed, setImgFailed] = useState(false);
-  const showImage = !!image && !imgFailed;
-  const [from, to] = avatarGradient(name);
+  const colors = useThemeColors();
+  const experienceLabel = experience
+    ? EXPERIENCE_LABELS[experience] ?? experience
+    : null;
+
+  // At most one line of "why" chips, overlap first; nothing renders without a
+  // real signal — fake reasons would break trust in the whole conceit.
+  const overlap = (sharedInterests ?? []).slice(0, 2);
+  const locality = isSameCity
+    ? "Same city"
+    : isNearby && distanceMiles != null
+      ? `~${Math.max(1, Math.round(distanceMiles))} mi away`
+      : null;
+  const hasWhy = overlap.length > 0 || locality != null;
 
   return (
-    <View style={[styles.profileCard, style]} testID={testID}>
-      {showImage ? (
-        <Image
-          source={{ uri: image }}
-          style={StyleSheet.absoluteFill}
-          contentFit="cover"
-          transition={250}
-          onError={() => setImgFailed(true)}
-          testID={testID ? `${testID}:image` : undefined}
-        />
-      ) : (
-        <LinearGradient
-          colors={[from, to]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[StyleSheet.absoluteFill, styles.fallback]}
-        >
-          <Text style={styles.fallbackInitial}>
-            {(name?.charAt(0) || "?").toUpperCase()}
+    <Pressable
+      accessibilityRole={onPress ? "button" : undefined}
+      accessibilityLabel={onPress ? `View ${name}'s full profile` : undefined}
+      disabled={!onPress}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.profileCard,
+        { backgroundColor: colors.surfaceCard },
+        pressed && onPress ? { opacity: 0.96 } : null,
+        style,
+      ]}
+      testID={testID}
+    >
+      {/* Header: avatar beside identity */}
+      <View style={styles.profileHeader}>
+        <Avatar uri={image} name={name} size={72} radius={24} />
+        <View style={styles.profileIdentity}>
+          <Text
+            style={[styles.profileName, { color: colors.textPrimary }]}
+            numberOfLines={1}
+          >
+            {name}
           </Text>
-        </LinearGradient>
-      )}
-
-      {/* Legibility scrim */}
-      <LinearGradient
-        colors={gradients.photoScrim}
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-      />
-
-      {/* Experience pill */}
-      {experience && (
-        <View style={styles.pill}>
-          <Feather name="award" size={12} color="#FFFFFF" />
-          <Text style={styles.pillText}>
-            {EXPERIENCE_LABELS[experience] ?? experience}
-          </Text>
-        </View>
-      )}
-
-      {/* Bottom info */}
-      <View style={styles.profileInfo}>
-        <Text style={styles.profileName} numberOfLines={1}>
-          {name}
-        </Text>
-
-        <View style={styles.metaRow}>
-          <Feather name="briefcase" size={13} color="rgba(255,255,255,0.9)" />
-          <Text style={styles.profileTitle} numberOfLines={1}>
+          <Text
+            style={[styles.profileTitle, { color: colors.textSecondary }]}
+            numberOfLines={1}
+          >
             {title}
-            {industry ? `  ·  ${industry}` : ""}
           </Text>
+          <View style={styles.metaRow}>
+            {industry ? (
+              <Text
+                style={[typography.caption, { color: colors.textTertiary }]}
+                numberOfLines={1}
+              >
+                {industry}
+              </Text>
+            ) : null}
+            {experienceLabel ? (
+              <View
+                style={[styles.pill, { backgroundColor: colors.surfaceInput }]}
+              >
+                <Feather name="award" size={11} color={colors.textSecondary} />
+                <Text style={[styles.pillText, { color: colors.textSecondary }]}>
+                  {experienceLabel}
+                </Text>
+              </View>
+            ) : null}
+          </View>
         </View>
+      </View>
 
-        {bio ? (
-          <Text style={styles.profileBio} numberOfLines={2}>
-            {bio}
-          </Text>
-        ) : null}
+      <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-        {prompt ? (
-          <View style={styles.promptChip}>
-            <Feather name="message-circle" size={13} color="#FFFFFF" />
-            <Text style={styles.promptText} numberOfLines={2}>
+      {/* Why you're seeing them — your algorithm, visibly obeying */}
+      {hasWhy ? (
+        <View style={styles.whyRow}>
+          {overlap.length > 0 ? (
+            <View
+              style={[styles.whyChip, { backgroundColor: colors.primary + "1A" }]}
+            >
+              <Text style={[styles.whyChipText, { color: colors.primary }]}>
+                ✦ You both: {overlap.join(" · ")}
+              </Text>
+            </View>
+          ) : null}
+          {locality ? (
+            <View
+              style={[styles.whyChip, { backgroundColor: colors.surfaceInput }]}
+            >
+              <Text
+                style={[styles.whyChipText, { color: colors.textSecondary }]}
+              >
+                ◦ {locality}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
+      {/* Bio is the hero text */}
+      {bio ? (
+        <Text
+          style={[styles.profileBio, { color: colors.textPrimary }]}
+          numberOfLines={5}
+        >
+          {bio}
+        </Text>
+      ) : null}
+
+      {/* Conversation starter — the largest element after the name */}
+      {prompt ? (
+        <View style={styles.promptBlock}>
+          <View style={styles.promptLabelRow}>
+            <Feather
+              name="message-circle"
+              size={14}
+              color={colors.textSecondary}
+            />
+            <Text style={[typography.label, { color: colors.textSecondary }]}>
+              Ask me about…
+            </Text>
+          </View>
+          <View
+            style={[
+              styles.promptChip,
+              {
+                backgroundColor: colors.surfaceInput,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Text
+              style={[styles.promptText, { color: colors.textPrimary }]}
+              numberOfLines={3}
+            >
               {prompt}
             </Text>
           </View>
-        ) : null}
-      </View>
-    </View>
+        </View>
+      ) : null}
+
+      {onPress ? (
+        <View style={styles.moreRow}>
+          <Text style={[typography.caption, { color: colors.textTertiary }]}>
+            View full profile
+          </Text>
+          <Feather name="chevron-right" size={14} color={colors.textTertiary} />
+        </View>
+      ) : null}
+    </Pressable>
   );
 };
 
@@ -250,88 +332,96 @@ const styles = StyleSheet.create({
   },
   profileCard: {
     width: "100%",
-    height: "100%",
     borderRadius: 28,
     overflow: "hidden",
-    backgroundColor: "#1E293B",
+    padding: spacing.xl,
     ...elevation.xl,
   },
-  fallback: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  fallbackInitial: {
-    color: "rgba(255,255,255,0.92)",
-    fontSize: 140,
-    fontWeight: "800",
-  },
-  pill: {
-    position: "absolute",
-    top: spacing.lg,
-    right: spacing.lg,
+  profileHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 7,
+    gap: spacing.lg,
+  },
+  profileIdentity: {
+    flex: 1,
+    gap: 2,
+  },
+  pill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
     borderRadius: borderRadius.full,
-    backgroundColor: "rgba(15,23,42,0.45)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.25)",
   },
   pillText: {
-    color: "#FFFFFF",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
-  },
-  profileInfo: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    padding: spacing.xl,
-    gap: spacing.sm,
   },
   metaRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: spacing.sm,
+    marginTop: 2,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: spacing.lg,
+  },
+  whyRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  whyChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 5,
+    borderRadius: borderRadius.full,
+  },
+  whyChipText: {
+    fontSize: 12,
+    fontWeight: "700",
   },
   profileName: {
-    fontSize: 30,
+    fontSize: 25,
     fontWeight: "800",
-    color: "#FFFFFF",
     letterSpacing: -0.5,
   },
   profileTitle: {
     ...typography.body,
-    color: "rgba(255,255,255,0.92)",
-    flexShrink: 1,
     fontWeight: "600",
   },
   profileBio: {
     ...typography.body,
-    color: "rgba(255,255,255,0.82)",
-    lineHeight: 21,
+    lineHeight: 24,
+  },
+  promptBlock: {
+    marginTop: spacing.lg,
+    gap: spacing.sm,
+  },
+  promptLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   promptChip: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: spacing.sm,
-    marginTop: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    backgroundColor: "rgba(255,255,255,0.16)",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.22)",
   },
   promptText: {
-    ...typography.caption,
-    color: "#FFFFFF",
-    flex: 1,
-    fontWeight: "500",
-    lineHeight: 17,
+    ...typography.body,
+    fontWeight: "600",
+    lineHeight: 23,
+  },
+  moreRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 2,
+    marginTop: spacing.lg,
   },
   connectionCard: {
     flexDirection: "row",

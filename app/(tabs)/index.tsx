@@ -1,5 +1,5 @@
-import { DiscoverySwipeDeck } from '@screens/DiscoveryDeck';
+import { DiscoveryIntro } from '@screens/DiscoveryIntro';
 
 export default function DiscoverScreen() {
-  return <DiscoverySwipeDeck />;
+  return <DiscoveryIntro />;
 }
