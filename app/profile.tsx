@@ -1,26 +1,26 @@
 import { Button } from "@components/Button";
+import {
+    AvatarHero,
+    ExperienceChips,
+    SectionCard,
+} from "@components/ProfileFormUI";
 import { TextInput } from "@components/TextInput";
 import {
     borderRadius,
     createStyles,
-    elevation,
-    gradients,
     spacing,
     typography,
     useThemeColors,
-    type ColorScheme,
 } from "@constants/theme";
 import { Feather } from "@expo/vector-icons";
 import { useAuth } from "@hooks/useAuth";
 import { Profile, supabase, SUPABASE_BUCKET } from "@services/supabase";
 import { useAppStore } from "@store/appStore";
 import * as ImagePicker from "expo-image-picker";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
     Alert,
-    Image,
     KeyboardAvoidingView,
     Platform,
     Pressable,
@@ -30,53 +30,6 @@ import {
     Text,
     View,
 } from "react-native";
-
-const EXPERIENCE_OPTIONS: {
-  value: Profile["experience_level"];
-  label: string;
-}[] = [
-  { value: "student", label: "Student" },
-  { value: "early", label: "Early career" },
-  { value: "mid", label: "Mid-career" },
-  { value: "senior", label: "Senior" },
-  { value: "founder", label: "Founder" },
-];
-
-// Module-level so it isn't recreated on every render (that would remount its
-// children and drop TextInput focus mid-keystroke).
-const SectionCard: React.FC<{
-  colors: ColorScheme;
-  icon: keyof typeof Feather.glyphMap;
-  title: string;
-  subtitle?: string;
-  children: React.ReactNode;
-}> = ({ colors, icon, title, subtitle, children }) => (
-  <View
-    style={[
-      localStyles.section,
-      { backgroundColor: colors.surfaceCard, ...elevation.sm },
-    ]}
-  >
-    <View style={localStyles.sectionHeader}>
-      <View
-        style={[localStyles.sectionIcon, { backgroundColor: colors.primary + "1F" }]}
-      >
-        <Feather name={icon} size={15} color={colors.primary} />
-      </View>
-      <View style={localStyles.flex1}>
-        <Text style={[localStyles.sectionTitle, { color: colors.textPrimary }]}>
-          {title}
-        </Text>
-        {subtitle ? (
-          <Text style={[typography.caption, { color: colors.textTertiary }]}>
-            {subtitle}
-          </Text>
-        ) : null}
-      </View>
-    </View>
-    {children}
-  </View>
-);
 
 export default function ProfileScreen() {
   const colors = useThemeColors();
@@ -319,48 +272,16 @@ export default function ProfileScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {/* Gradient hero with the tappable avatar + a live identity preview */}
-          <LinearGradient
-            colors={gradients.brand}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={localStyles.hero}
-          >
-            <Pressable
-              onPress={handlePickImage}
-              accessibilityLabel="Change profile photo"
-              accessibilityRole="button"
-              style={localStyles.avatarWrap}
-            >
-              {resolvedPhotoUri ? (
-                <Image
-                  source={{ uri: resolvedPhotoUri }}
-                  style={localStyles.avatar}
-                  resizeMode="cover"
-                  onError={() => setImageError(true)}
-                />
-              ) : (
-                <View style={[localStyles.avatar, localStyles.avatarPlaceholder]}>
-                  <Text style={localStyles.avatarInitial}>{initial}</Text>
-                </View>
-              )}
-              <View
-                style={[
-                  localStyles.cameraBadge,
-                  { backgroundColor: colors.primary, borderColor: "#FFFFFF" },
-                ]}
-              >
-                <Feather name="camera" size={14} color="#FFFFFF" />
-              </View>
-            </Pressable>
-
-            <Text style={localStyles.heroName} numberOfLines={1}>
-              {displayName.trim() || "Your name"}
-            </Text>
-            <Text style={localStyles.heroMeta} numberOfLines={1}>
-              {metaPreview || "Add your role & industry"}
-            </Text>
-            <Text style={localStyles.heroHint}>Tap the photo to change it</Text>
-          </LinearGradient>
+          <AvatarHero
+            colors={colors}
+            uri={resolvedPhotoUri}
+            initial={initial}
+            name={displayName.trim() || "Your name"}
+            meta={metaPreview || "Add your role & industry"}
+            hint="Tap the photo to change it"
+            onPress={handlePickImage}
+            onImageError={() => setImageError(true)}
+          />
 
           {/* Basics */}
           <SectionCard colors={colors} icon="user" title="The basics">
@@ -386,38 +307,11 @@ export default function ProfileScreen() {
             <Text style={[localStyles.fieldLabel, { color: colors.textPrimary }]}>
               Experience level
             </Text>
-            <View style={localStyles.chipRow}>
-              {EXPERIENCE_OPTIONS.map(({ value, label }) => {
-                const isSelected = experienceLevel === value;
-                return (
-                  <Pressable
-                    key={value}
-                    style={[
-                      localStyles.chip,
-                      {
-                        backgroundColor: isSelected
-                          ? colors.primary
-                          : colors.surfaceInput,
-                        borderColor: isSelected ? colors.primary : colors.border,
-                      },
-                    ]}
-                    onPress={() => setExperienceLevel(value)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: isSelected }}
-                    accessibilityLabel={`Select ${label} experience level`}
-                  >
-                    <Text
-                      style={[
-                        localStyles.chipText,
-                        { color: isSelected ? "#FFFFFF" : colors.textPrimary },
-                      ]}
-                    >
-                      {label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+            <ExperienceChips
+              colors={colors}
+              value={experienceLevel}
+              onChange={setExperienceLevel}
+            />
           </SectionCard>
 
           {/* About */}
@@ -509,108 +403,9 @@ const localStyles = StyleSheet.create({
     alignItems: "center",
     padding: spacing.lg,
   },
-  hero: {
-    alignItems: "center",
-    borderRadius: 28,
-    paddingVertical: spacing.xl,
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.lg,
-    ...elevation.lg,
-  },
-  avatarWrap: {
-    width: 112,
-    height: 112,
-    marginBottom: spacing.md,
-  },
-  avatar: {
-    width: 112,
-    height: 112,
-    borderRadius: 56,
-    borderWidth: 3,
-    borderColor: "rgba(255,255,255,0.7)",
-    backgroundColor: "rgba(255,255,255,0.2)",
-  },
-  avatarPlaceholder: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarInitial: {
-    color: "#FFFFFF",
-    fontSize: 44,
-    fontWeight: "800",
-  },
-  cameraBadge: {
-    position: "absolute",
-    right: -2,
-    bottom: -2,
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: 2,
-    alignItems: "center",
-    justifyContent: "center",
-    ...elevation.sm,
-  },
-  heroName: {
-    color: "#FFFFFF",
-    fontSize: 22,
-    fontWeight: "800",
-    letterSpacing: -0.4,
-  },
-  heroMeta: {
-    color: "rgba(255,255,255,0.92)",
-    fontSize: 14,
-    fontWeight: "600",
-    marginTop: 2,
-  },
-  heroHint: {
-    color: "rgba(255,255,255,0.75)",
-    fontSize: 12,
-    marginTop: spacing.sm,
-  },
-  section: {
-    borderRadius: 22,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  sectionIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    letterSpacing: -0.2,
-  },
   fieldLabel: {
     ...typography.label,
     marginBottom: spacing.md,
-  },
-  chipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-  },
-  chip: {
-    borderWidth: 1,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: 999,
-    minHeight: 36,
-    justifyContent: "center",
-  },
-  chipText: {
-    fontSize: 13,
-    fontWeight: "700",
   },
   errorBanner: {
     flexDirection: "row",

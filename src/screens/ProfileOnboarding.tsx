@@ -1,5 +1,10 @@
 import { CityTypeahead, InterestChips } from "@components/AlgorithmInputs";
 import { Button } from "@components/Button";
+import {
+    AvatarHero,
+    ExperienceChips,
+    SectionCard,
+} from "@components/ProfileFormUI";
 import { TextInput } from "@components/TextInput";
 import {
     borderRadius,
@@ -8,6 +13,7 @@ import {
     typography,
     useThemeColors,
 } from "@constants/theme";
+import { Feather } from "@expo/vector-icons";
 import { useAuth } from "@hooks/useAuth";
 import {
     City,
@@ -23,7 +29,6 @@ import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
     Alert,
-    Image,
     KeyboardAvoidingView,
     Platform,
     Pressable,
@@ -37,14 +42,6 @@ import {
 interface ProfileOnboardingProps {
   onComplete?: () => void;
 }
-
-const EXPERIENCE_LEVELS = [
-  "student",
-  "early",
-  "mid",
-  "senior",
-  "founder",
-] as const;
 
 const ONBOARDING_STEPS = ["basic", "algorithm", "photo", "prompts"] as const;
 type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
@@ -101,9 +98,9 @@ export const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({
   );
   const [roleTitle, setRoleTitle] = useState(currentProfile?.role_title ?? "");
   const [industry, setIndustry] = useState(currentProfile?.industry ?? "");
-  const [experienceLevel, setExperienceLevel] = useState<string>(
-    currentProfile?.experience_level ?? "early",
-  );
+  const [experienceLevel, setExperienceLevel] = useState<
+    Profile["experience_level"]
+  >(currentProfile?.experience_level ?? "early");
   const [bio, setBio] = useState(currentProfile?.bio ?? "");
 
   // Photo
@@ -344,314 +341,182 @@ export const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({
           {/* Basic info step */}
           {step === "basic" && (
             <View style={localStyles.stepContent}>
-              <Text
-                style={[
-                  typography.headline,
-                  {
-                    color: colors.textPrimary,
-                    marginBottom: spacing.lg,
-                  },
-                ]}
-              >
+              <Text style={[localStyles.stepTitle, { color: colors.textPrimary }]}>
                 Build your profile
               </Text>
-
-              <TextInput
-                label="Your name"
-                placeholder="Jane Doe"
-                value={displayName}
-                onChangeText={setDisplayName}
-              />
-
-              <TextInput
-                label="Current role / title"
-                placeholder="e.g., Product Manager, Engineer"
-                value={roleTitle}
-                onChangeText={setRoleTitle}
-              />
-
-              <TextInput
-                label="Industry / field"
-                placeholder="e.g., Tech, Design, Finance"
-                value={industry}
-                onChangeText={setIndustry}
-              />
-
-              {/* Experience level selector */}
               <Text
-                style={[
-                  typography.label,
-                  {
-                    color: colors.textPrimary,
-                    marginBottom: spacing.md,
-                  },
-                ]}
+                style={[localStyles.stepSubtitle, { color: colors.textSecondary }]}
               >
-                Experience level
+                This is what others see when you cross paths.
               </Text>
-              <View style={localStyles.levelSelector}>
-                {EXPERIENCE_LEVELS.map((level) => (
-                  <Pressable
-                    key={level}
-                    onPress={() => setExperienceLevel(level)}
-                    style={[
-                      localStyles.levelButton,
-                      {
-                        backgroundColor:
-                          experienceLevel === level
-                            ? colors.primary
-                            : colors.surfaceInput,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        typography.caption,
-                        {
-                          color:
-                            experienceLevel === level
-                              ? "#FFFFFF"
-                              : colors.textPrimary,
-                        },
-                      ]}
-                    >
-                      {level.charAt(0).toUpperCase() + level.slice(1)}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
 
-              <TextInput
-                label="Bio / what you do"
-                placeholder="Tell us a bit about yourself..."
-                value={bio}
-                onChangeText={setBio}
-                multiline
-              />
-
-              {error && (
+              <SectionCard colors={colors} icon="user" title="The basics">
+                <TextInput
+                  label="Your name"
+                  placeholder="Jane Doe"
+                  value={displayName}
+                  onChangeText={setDisplayName}
+                />
+                <TextInput
+                  label="Current role / title"
+                  placeholder="e.g., Product Manager, Engineer"
+                  value={roleTitle}
+                  onChangeText={setRoleTitle}
+                />
+                <TextInput
+                  label="Industry / field"
+                  placeholder="e.g., Tech, Design, Finance"
+                  value={industry}
+                  onChangeText={setIndustry}
+                />
                 <Text
-                  style={[
-                    typography.caption,
-                    {
-                      color: colors.error,
-                      marginBottom: spacing.lg,
-                    },
-                  ]}
+                  style={[localStyles.fieldLabel, { color: colors.textPrimary }]}
                 >
-                  {error}
+                  Experience level
                 </Text>
-              )}
+                <ExperienceChips
+                  colors={colors}
+                  value={experienceLevel}
+                  onChange={setExperienceLevel}
+                />
+              </SectionCard>
+
+              <SectionCard
+                colors={colors}
+                icon="edit-3"
+                title="About you"
+                subtitle="A quick snapshot people see first"
+              >
+                <TextInput
+                  placeholder="Tell us a bit about yourself..."
+                  value={bio}
+                  onChangeText={setBio}
+                  multiline
+                />
+              </SectionCard>
             </View>
           )}
 
           {/* Build your algorithm step (skippable) */}
           {step === "algorithm" && (
             <View style={localStyles.stepContent}>
-              <Text
-                style={[
-                  typography.headline,
-                  {
-                    color: colors.textPrimary,
-                    marginBottom: spacing.sm,
-                  },
-                ]}
-              >
+              <Text style={[localStyles.stepTitle, { color: colors.textPrimary }]}>
                 Build your algorithm
               </Text>
               <Text
-                style={[
-                  typography.body,
-                  {
-                    color: colors.textSecondary,
-                    marginBottom: spacing.lg,
-                  },
-                ]}
+                style={[localStyles.stepSubtitle, { color: colors.textSecondary }]}
               >
                 Pick what you're into and where you are — Discover puts people
                 who match first. You can tune this any time.
               </Text>
 
-              <View style={localStyles.algorithmHeader}>
-                <Text style={[typography.label, { color: colors.textPrimary }]}>
-                  Your interests
-                </Text>
-                <Text
-                  style={[typography.caption, { color: colors.textTertiary }]}
-                >
-                  {selectedInterestIds.length} of {MAX_INTERESTS}
-                </Text>
-              </View>
-              <InterestChips
-                interests={curatedInterests}
-                selectedIds={selectedInterestIds}
-                onToggle={toggleOnboardingInterest}
-              />
+              <SectionCard
+                colors={colors}
+                icon="hash"
+                title="Your interests"
+                subtitle={`${selectedInterestIds.length} of ${MAX_INTERESTS} selected`}
+              >
+                <InterestChips
+                  interests={curatedInterests}
+                  selectedIds={selectedInterestIds}
+                  onToggle={toggleOnboardingInterest}
+                />
+              </SectionCard>
 
-              <Text
-                style={[
-                  typography.label,
-                  {
-                    color: colors.textPrimary,
-                    marginTop: spacing.xl,
-                    marginBottom: spacing.sm,
-                  },
-                ]}
+              <SectionCard
+                colors={colors}
+                icon="map-pin"
+                title="Where you are"
+                subtitle="We only know the city you tell us — never your location"
               >
-                Your city
-              </Text>
-              <CityTypeahead value={selectedCity} onSelect={setSelectedCity} />
-              <Text
-                style={[
-                  typography.caption,
-                  { color: colors.textTertiary, marginTop: spacing.sm },
-                ]}
-              >
-                We only know the city you tell us — never your location.
-              </Text>
+                <CityTypeahead value={selectedCity} onSelect={setSelectedCity} />
+              </SectionCard>
             </View>
           )}
 
           {/* Photo step */}
           {step === "photo" && (
             <View style={localStyles.stepContent}>
-              <Text
-                style={[
-                  typography.headline,
-                  {
-                    color: colors.textPrimary,
-                    marginBottom: spacing.lg,
-                  },
-                ]}
-              >
+              <Text style={[localStyles.stepTitle, { color: colors.textPrimary }]}>
                 Add a photo
               </Text>
-
-              <Pressable
-                onPress={handlePickImage}
-                style={[
-                  localStyles.photoUpload,
-                  {
-                    backgroundColor: colors.surfaceInput,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                {photoUri ? (
-                  <Image
-                    source={{ uri: photoUri }}
-                    style={localStyles.photoPreview}
-                  />
-                ) : (
-                  <View style={localStyles.photoPlaceholder}>
-                    <Text
-                      style={[
-                        typography.body,
-                        {
-                          color: colors.textSecondary,
-                          textAlign: "center",
-                        },
-                      ]}
-                    >
-                      Tap to select a portrait photo
-                    </Text>
-                  </View>
-                )}
-              </Pressable>
-
               <Text
-                style={[
-                  typography.caption,
-                  {
-                    color: colors.textSecondary,
-                    textAlign: "center",
-                    marginTop: spacing.md,
-                  },
-                ]}
+                style={[localStyles.stepSubtitle, { color: colors.textSecondary }]}
               >
-                Use a clear portrait photo. Good lighting helps!
+                A clear portrait helps people connect a face to your name.
               </Text>
 
-              {error && (
-                <Text
-                  style={[
-                    typography.caption,
-                    {
-                      color: colors.error,
-                      marginBottom: spacing.lg,
-                      marginTop: spacing.lg,
-                    },
-                  ]}
-                >
-                  {error}
-                </Text>
-              )}
+              <AvatarHero
+                colors={colors}
+                uri={photoUri}
+                initial={(displayName.trim().charAt(0) || "?").toUpperCase()}
+                name={displayName.trim() || "Your name"}
+                meta={
+                  [roleTitle.trim(), industry.trim()].filter(Boolean).join(" · ") ||
+                  "Add your role & industry"
+                }
+                hint={photoUri ? "Tap the photo to change it" : "Tap to add your photo"}
+                onPress={handlePickImage}
+              />
             </View>
           )}
 
           {/* Prompts step */}
           {step === "prompts" && (
             <View style={localStyles.stepContent}>
+              <Text style={[localStyles.stepTitle, { color: colors.textPrimary }]}>
+                Tell us more
+              </Text>
               <Text
-                style={[
-                  typography.headline,
-                  {
-                    color: colors.textPrimary,
-                    marginBottom: spacing.lg,
-                  },
-                ]}
+                style={[localStyles.stepSubtitle, { color: colors.textSecondary }]}
               >
-                Optional: Tell us more
+                Optional — these give people an easy way to start a conversation.
               </Text>
 
-              <TextInput
-                label="Ask me about..."
-                placeholder="e.g., Building sustainable tech"
-                value={askMeAbout}
-                onChangeText={setAskMeAbout}
-              />
-
-              <TextInput
-                label="I'm learning about..."
-                placeholder="e.g., Product strategy, ML basics"
-                value={learningAbout}
-                onChangeText={setLearningAbout}
-              />
-
-              <TextInput
-                label="My side project"
-                placeholder="e.g., A community platform for freelancers"
-                value={sideProject}
-                onChangeText={setSideProject}
-              />
-
-              <Text
-                style={[
-                  typography.caption,
-                  {
-                    color: colors.textSecondary,
-                    marginTop: spacing.lg,
-                  },
-                ]}
+              <SectionCard
+                colors={colors}
+                icon="message-circle"
+                title="Conversation starters"
               >
-                These help others find topics to discuss with you. You can skip
-                this and edit later.
-              </Text>
+                <TextInput
+                  label="Ask me about..."
+                  placeholder="e.g., Building sustainable tech"
+                  value={askMeAbout}
+                  onChangeText={setAskMeAbout}
+                />
+                <TextInput
+                  label="I'm learning about..."
+                  placeholder="e.g., Product strategy, ML basics"
+                  value={learningAbout}
+                  onChangeText={setLearningAbout}
+                />
+                <TextInput
+                  label="My side project"
+                  placeholder="e.g., A community platform for freelancers"
+                  value={sideProject}
+                  onChangeText={setSideProject}
+                />
+              </SectionCard>
             </View>
           )}
 
           {error ? (
-            <Text
+            <View
               style={[
-                typography.caption,
+                localStyles.errorBanner,
                 {
-                  color: colors.error,
-                  marginBottom: spacing.lg,
+                  backgroundColor: colors.error + "14",
+                  borderColor: colors.error,
                 },
               ]}
             >
-              {error}
-            </Text>
+              <Feather name="alert-circle" size={16} color={colors.error} />
+              <Text
+                style={[typography.caption, localStyles.flex1, { color: colors.error }]}
+              >
+                {error}
+              </Text>
+            </View>
           ) : null}
 
           {/* Actions */}
@@ -703,48 +568,29 @@ const localStyles = StyleSheet.create({
   stepContent: {
     marginBottom: spacing.xl,
   },
-  algorithmHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+  stepTitle: {
+    ...typography.headline,
+    marginBottom: spacing.xs,
+  },
+  stepSubtitle: {
+    ...typography.body,
+    marginBottom: spacing.lg,
+  },
+  fieldLabel: {
+    ...typography.label,
+    marginTop: spacing.sm,
     marginBottom: spacing.md,
   },
-  levelSelector: {
+  errorBanner: {
     flexDirection: "row",
-    flexWrap: "wrap",
+    alignItems: "center",
     gap: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  levelButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    borderWidth: 1,
     borderRadius: borderRadius.md,
-    minHeight: 36,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  photoUpload: {
-    width: "100%",
-    height: 300,
-    borderRadius: borderRadius.lg,
-    borderWidth: 2,
-    borderStyle: "dashed",
-    justifyContent: "center",
-    alignItems: "center",
+    padding: spacing.md,
     marginBottom: spacing.lg,
-    overflow: "hidden",
   },
-  photoPreview: {
-    width: "100%",
-    height: "100%",
-    resizeMode: "cover",
-  },
-  photoPlaceholder: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: spacing.lg,
-  },
+  flex1: { flex: 1 },
   actions: {
     gap: spacing.md,
   },
