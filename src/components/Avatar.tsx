@@ -73,10 +73,12 @@ export const Avatar: React.FC<AvatarProps> = ({
 };
 
 const styles = StyleSheet.create({
+  // NB: no `flex: 1` here. The gradient already has a fixed width/height; a
+  // flex on it would collapse its basis and make the avatar grow to fill a row
+  // parent (e.g. the Settings banner), squeezing and clipping the name/meta.
   center: {
     alignItems: "center",
     justifyContent: "center",
-    flex: 1,
   },
   initial: {
     color: "#FFFFFF",

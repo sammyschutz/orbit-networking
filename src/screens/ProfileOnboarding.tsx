@@ -24,6 +24,7 @@ import {
     SUPABASE_BUCKET,
 } from "@services/supabase";
 import { useAppStore } from "@store/appStore";
+import { normalizeLinkedInUrl } from "@utils/linkedin";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
@@ -118,6 +119,9 @@ export const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({
   const [sideProject, setSideProject] = useState(
     currentProfile?.side_project ?? "",
   );
+  const [linkedinUrl, setLinkedinUrl] = useState(
+    currentProfile?.linkedin_url ?? "",
+  );
 
   const handlePickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -189,10 +193,7 @@ export const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({
     }
 
     if (step === "photo") {
-      if (!photoUri) {
-        setError("Please upload a profile photo");
-        return;
-      }
+      // A photo is optional — every avatar falls back to initials without one.
       setError("");
       setStep("prompts");
       return;
@@ -205,6 +206,19 @@ export const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({
       }
       if (!user) {
         setError("Unable to complete profile: no authenticated user found.");
+        return;
+      }
+
+      // LinkedIn is optional, but anything entered must be a valid profile URL
+      // so the connection-screen Connect button never opens a broken link.
+      const trimmedLinkedin = linkedinUrl.trim();
+      const normalizedLinkedin = trimmedLinkedin
+        ? normalizeLinkedInUrl(trimmedLinkedin)
+        : null;
+      if (trimmedLinkedin && !normalizedLinkedin) {
+        setError(
+          "Enter a valid LinkedIn profile URL, e.g. linkedin.com/in/your-name",
+        );
         return;
       }
 
@@ -227,10 +241,12 @@ export const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({
           industry,
           experience_level: experienceLevel as Profile["experience_level"],
           bio,
-          photo_url: uploadedPhotoUrl as string,
+          // Optional — stored as "" when skipped (the column is NOT NULL).
+          photo_url: uploadedPhotoUrl ?? "",
           ask_me_about: askMeAbout || null,
           learning_about: learningAbout || null,
           side_project: sideProject || null,
+          linkedin_url: normalizedLinkedin,
           city_id: selectedCity?.id ?? null,
           is_complete: true,
         };
@@ -443,7 +459,8 @@ export const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({
               <Text
                 style={[localStyles.stepSubtitle, { color: colors.textSecondary }]}
               >
-                A clear portrait helps people connect a face to your name.
+                Optional — a clear portrait helps people connect a face to your
+                name, but you can add one later.
               </Text>
 
               <AvatarHero
@@ -496,6 +513,15 @@ export const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({
                   value={sideProject}
                   onChangeText={setSideProject}
                 />
+                <TextInput
+                  label="LinkedIn profile"
+                  placeholder="linkedin.com/in/your-name"
+                  helper="Shown as a Connect button once you're connected"
+                  value={linkedinUrl}
+                  onChangeText={setLinkedinUrl}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
               </SectionCard>
             </View>
           )}
@@ -528,9 +554,10 @@ export const ProfileOnboarding: React.FC<ProfileOnboardingProps> = ({
               title={
                 step === "prompts"
                   ? "Complete profile"
-                  : step === "algorithm" &&
+                  : (step === "algorithm" &&
                       !selectedInterestIds.length &&
-                      !selectedCity
+                      !selectedCity) ||
+                    (step === "photo" && !photoUri)
                     ? "Skip for now"
                     : "Continue"
               }

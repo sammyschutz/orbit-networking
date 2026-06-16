@@ -23,6 +23,9 @@
       "@screens/*": [
         "src/screens/*"
       ],
+      "@utils/*": [
+        "src/utils/*"
+      ],
       "@/*": [
         "./*"
       ]

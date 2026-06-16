@@ -62,6 +62,7 @@ export interface Profile {
   ask_me_about?: string | null;
   learning_about?: string | null;
   side_project?: string | null;
+  linkedin_url?: string | null;
   is_complete: boolean;
   created_at: string;
   updated_at: string;

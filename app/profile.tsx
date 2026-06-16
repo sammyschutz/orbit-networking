@@ -16,6 +16,7 @@ import { Feather } from "@expo/vector-icons";
 import { useAuth } from "@hooks/useAuth";
 import { Profile, supabase, SUPABASE_BUCKET } from "@services/supabase";
 import { useAppStore } from "@store/appStore";
+import { normalizeLinkedInUrl } from "@utils/linkedin";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
@@ -48,6 +49,7 @@ export default function ProfileScreen() {
   const [askMeAbout, setAskMeAbout] = useState("");
   const [learningAbout, setLearningAbout] = useState("");
   const [sideProject, setSideProject] = useState("");
+  const [linkedinUrl, setLinkedinUrl] = useState("");
   const [imageError, setImageError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +65,7 @@ export default function ProfileScreen() {
     setAskMeAbout(currentProfile.ask_me_about ?? "");
     setLearningAbout(currentProfile.learning_about ?? "");
     setSideProject(currentProfile.side_project ?? "");
+    setLinkedinUrl(currentProfile.linkedin_url ?? "");
     setImageError(false);
   }, [currentProfile]);
 
@@ -185,8 +188,17 @@ export default function ProfileScreen() {
       setError("Please fill out your name, role, industry, and bio.");
       return;
     }
-    if (!photoUri) {
-      setError("Please upload a profile photo.");
+
+    // LinkedIn is optional, but if provided it must be a valid profile URL so
+    // the "Connect on LinkedIn" button can never open a broken link.
+    const trimmedLinkedin = linkedinUrl.trim();
+    const normalizedLinkedin = trimmedLinkedin
+      ? normalizeLinkedInUrl(trimmedLinkedin)
+      : null;
+    if (trimmedLinkedin && !normalizedLinkedin) {
+      setError(
+        "Enter a valid LinkedIn profile URL, e.g. linkedin.com/in/your-name",
+      );
       return;
     }
 
@@ -205,10 +217,12 @@ export default function ProfileScreen() {
         industry: industry.trim(),
         experience_level: experienceLevel,
         bio: bio.trim(),
-        photo_url: savedPhotoUrl,
+        // Optional — stored as "" when skipped (the column is NOT NULL).
+        photo_url: savedPhotoUrl ?? "",
         ask_me_about: askMeAbout.trim() || null,
         learning_about: learningAbout.trim() || null,
         side_project: sideProject.trim() || null,
+        linkedin_url: normalizedLinkedin,
         is_complete: true,
       });
 
@@ -278,10 +292,28 @@ export default function ProfileScreen() {
             initial={initial}
             name={displayName.trim() || "Your name"}
             meta={metaPreview || "Add your role & industry"}
-            hint="Tap the photo to change it"
+            hint={photoUri ? "Tap the photo to change it" : "Tap to add a photo"}
             onPress={handlePickImage}
             onImageError={() => setImageError(true)}
           />
+
+          {photoUri ? (
+            <Pressable
+              onPress={() => {
+                setPhotoUri(null);
+                setImageError(false);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Remove profile photo"
+              style={localStyles.removePhoto}
+              hitSlop={8}
+            >
+              <Feather name="trash-2" size={14} color={colors.textSecondary} />
+              <Text style={[typography.label, { color: colors.textSecondary }]}>
+                Remove photo
+              </Text>
+            </Pressable>
+          ) : null}
 
           {/* Basics */}
           <SectionCard colors={colors} icon="user" title="The basics">
@@ -354,6 +386,15 @@ export default function ProfileScreen() {
               value={sideProject}
               onChangeText={setSideProject}
             />
+            <TextInput
+              label="LinkedIn profile"
+              placeholder="linkedin.com/in/your-name"
+              helper="Shown as a Connect button once you're connected"
+              value={linkedinUrl}
+              onChangeText={setLinkedinUrl}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
           </SectionCard>
 
           {error ? (
@@ -406,6 +447,15 @@ const localStyles = StyleSheet.create({
   fieldLabel: {
     ...typography.label,
     marginBottom: spacing.md,
+  },
+  removePhoto: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "center",
+    gap: 6,
+    marginTop: -spacing.sm,
+    marginBottom: spacing.lg,
+    paddingVertical: spacing.sm,
   },
   errorBanner: {
     flexDirection: "row",

@@ -9,6 +9,7 @@ import {
   Pressable,
   ActivityIndicator,
   RefreshControl,
+  Linking,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -26,6 +27,7 @@ import { Button } from '@components/Button';
 import { SafetyMenu } from '@components/SafetyMenu';
 import { useAppStore } from '@store/appStore';
 import { supabase, getOtherUserId, Connection, Profile } from '@services/supabase';
+import { normalizeLinkedInUrl } from '@utils/linkedin';
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 
 interface ConnectionWithProfile extends Connection {
@@ -445,6 +447,25 @@ export const ConnectionDetail: React.FC<ConnectionDetailProps> = ({ connectionId
               style={{ marginBottom: spacing.lg }}
             />
           ) : null}
+
+          {/* Connect on LinkedIn — only when the other user has a valid, stored
+              LinkedIn URL. Re-normalized here so a bad row can never open. */}
+          {(() => {
+            const linkedinUrl = normalizeLinkedInUrl(profile.linkedin_url);
+            if (!linkedinUrl) return null;
+            return (
+              <Button
+                title="Connect on LinkedIn"
+                variant="secondary"
+                onPress={() => {
+                  Linking.openURL(linkedinUrl).catch(() => {
+                    /* https links always have a handler; ignore rare failures */
+                  });
+                }}
+                style={{ marginBottom: spacing.lg }}
+              />
+            );
+          })()}
 
           {/* Bio */}
           <Text
