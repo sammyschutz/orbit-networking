@@ -4,9 +4,12 @@ import { HandshakeOverlay } from "@components/HandshakeOverlay";
 import { NotificationsBanner } from "@components/NotificationsBanner";
 import {
   borderRadius,
+  elevation,
   gradients,
+  screenBackground,
   spacing,
   typography,
+  useIsDark,
   useThemeColors,
 } from "@constants/theme";
 import { Feather } from "@expo/vector-icons";
@@ -45,6 +48,7 @@ export const DiscoveryIntro: React.FC<DiscoveryIntroProps> = ({
   onNoMoreCards,
 }) => {
   const colors = useThemeColors();
+  const isDark = useIsDark();
   const router = useRouter();
 
   const {
@@ -249,18 +253,24 @@ export const DiscoveryIntro: React.FC<DiscoveryIntroProps> = ({
   const currentCandidate = candidates[currentIndex];
 
   return (
-    <LinearGradient
-      colors={
-        (colors.surfaceBg === "#FFFFFF"
-          ? ["#FFFFFF", "#F5F3FF", "#FDF2F8"]
-          : ["#0F172A", "#1E1B4B", "#0F172A"]) as readonly [
-          string,
-          string,
-          ...string[],
-        ]
-      }
-      style={styles.flex}
-    >
+    <LinearGradient colors={screenBackground(isDark)} style={styles.flex}>
+      {/* Ambient nebula glow — static, decorative depth behind the deck. */}
+      <View
+        pointerEvents="none"
+        style={[
+          styles.blob,
+          styles.blobTop,
+          { backgroundColor: isDark ? "rgba(129,140,248,0.20)" : "rgba(99,102,241,0.10)" },
+        ]}
+      />
+      <View
+        pointerEvents="none"
+        style={[
+          styles.blob,
+          styles.blobBottom,
+          { backgroundColor: isDark ? "rgba(236,72,153,0.16)" : "rgba(236,72,153,0.08)" },
+        ]}
+      />
       <SafeAreaView style={styles.flex}>
         <View style={styles.container}>
           <NotificationsBanner />
@@ -268,12 +278,12 @@ export const DiscoveryIntro: React.FC<DiscoveryIntroProps> = ({
           {/* Header */}
           <View style={styles.header}>
             <LinearGradient
-              colors={gradients.brand}
+              colors={gradients.nebula}
               start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.logoBadge}
+              end={{ x: 1, y: 1 }}
+              style={[styles.logoBadge, elevation.glow]}
             >
-              <Feather name="zap" size={18} color="#FFFFFF" />
+              <Feather name="target" size={18} color="#FFFFFF" />
             </LinearGradient>
             <View style={styles.headerText}>
               <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
@@ -495,6 +505,24 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: spacing.lg,
+  },
+  // Large, mostly off-screen translucent circles that wash the corners with
+  // brand color for a subtle nebula depth behind the deck.
+  blob: {
+    position: "absolute",
+    borderRadius: 9999,
+  },
+  blobTop: {
+    width: 340,
+    height: 340,
+    top: -140,
+    right: -120,
+  },
+  blobBottom: {
+    width: 320,
+    height: 320,
+    bottom: -150,
+    left: -130,
   },
   centerContent: {
     flex: 1,

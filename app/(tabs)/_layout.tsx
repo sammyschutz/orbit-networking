@@ -32,7 +32,7 @@ export default function TabLayout() {
         options={{
           title: "Discover",
           tabBarIcon: ({ color, focused }) => (
-            <Feather name="zap" size={focused ? 25 : 23} color={color} />
+            <Feather name="target" size={focused ? 25 : 23} color={color} />
           ),
         }}
       />

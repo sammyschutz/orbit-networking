@@ -4,8 +4,10 @@ import { TextInput } from "@components/TextInput";
 import {
     createStyles,
     gradients,
+    screenBackground,
     spacing,
     typography,
+    useIsDark,
     useThemeColors,
 } from "@constants/theme";
 import { Feather } from "@expo/vector-icons";
@@ -23,6 +25,20 @@ import {
     View,
 } from "react-native";
 
+/**
+ * Cosmic deep-space / lavender backdrop shared by the auth screens.
+ */
+const AuthBackground: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const isDark = useIsDark();
+  return (
+    <LinearGradient colors={screenBackground(isDark)} style={localStyles.flex}>
+      <SafeAreaView style={localStyles.flex}>{children}</SafeAreaView>
+    </LinearGradient>
+  );
+};
+
 const BrandMark: React.FC<{ label: string; tagline: string }> = ({
   label,
   tagline,
@@ -31,12 +47,12 @@ const BrandMark: React.FC<{ label: string; tagline: string }> = ({
   return (
     <View style={localStyles.header}>
       <LinearGradient
-        colors={gradients.brand}
+        colors={gradients.nebula}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={localStyles.logoBadge}
       >
-        <Feather name="zap" size={34} color="#FFFFFF" />
+        <Feather name="target" size={34} color="#FFFFFF" />
       </LinearGradient>
       <Text style={[localStyles.brandTitle, { color: colors.textPrimary }]}>
         {label}
@@ -111,9 +127,7 @@ export const LoginScreen: React.FC<AuthScreenProps> = ({
   };
 
   return (
-    <SafeAreaView
-      style={[styles.screen, { backgroundColor: colors.surfaceBg }]}
-    >
+    <AuthBackground>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.container}
@@ -124,7 +138,7 @@ export const LoginScreen: React.FC<AuthScreenProps> = ({
         >
           {/* Header */}
           <BrandMark
-            label="Zap"
+            label="Orbit"
             tagline="Explore careers, meet professionals, learn without LinkedIn pressure."
           />
 
@@ -194,7 +208,7 @@ export const LoginScreen: React.FC<AuthScreenProps> = ({
                 },
               ]}
             >
-              New to Zap?{" "}
+              New to Orbit?{" "}
             </Text>
             <Pressable
               onPress={onSwitchToSignUp}
@@ -212,7 +226,7 @@ export const LoginScreen: React.FC<AuthScreenProps> = ({
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </AuthBackground>
   );
 };
 
@@ -279,9 +293,7 @@ export const SignUpScreen: React.FC<AuthScreenProps> = ({
   };
 
   return (
-    <SafeAreaView
-      style={[styles.screen, { backgroundColor: colors.surfaceBg }]}
-    >
+    <AuthBackground>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.container}
@@ -292,7 +304,7 @@ export const SignUpScreen: React.FC<AuthScreenProps> = ({
         >
           {/* Header */}
           <BrandMark
-            label="Join Zap"
+            label="Join Orbit"
             tagline="Start exploring careers and connecting with professionals."
           />
 
@@ -388,11 +400,12 @@ export const SignUpScreen: React.FC<AuthScreenProps> = ({
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </AuthBackground>
   );
 };
 
 const localStyles = StyleSheet.create({
+  flex: { flex: 1 },
   scrollContent: {
     flexGrow: 1,
     justifyContent: "space-between",

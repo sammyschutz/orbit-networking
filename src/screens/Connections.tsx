@@ -16,10 +16,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import {
   useThemeColors,
+  useIsDark,
   typography,
   spacing,
   borderRadius,
   gradients,
+  elevation,
+  screenBackground,
   createStyles,
 } from '@constants/theme';
 import { ConnectionCard } from '@components/Card';
@@ -33,6 +36,20 @@ import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 interface ConnectionWithProfile extends Connection {
   profile?: Profile;
 }
+
+/**
+ * Cosmic deep-space / lavender backdrop for the connections list states.
+ */
+const ListBackground: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const isDark = useIsDark();
+  return (
+    <LinearGradient colors={screenBackground(isDark)} style={localStyles.flex}>
+      <SafeAreaView style={localStyles.flex}>{children}</SafeAreaView>
+    </LinearGradient>
+  );
+};
 
 /**
  * Connections list screen
@@ -162,13 +179,13 @@ export const ConnectionsList: React.FC = () => {
 
   if (!connectionsWithProfiles.length) {
     return (
-      <SafeAreaView style={[styles.screen, { backgroundColor: colors.surfaceBg }]}>
+      <ListBackground>
         <View style={[styles.container, localStyles.emptyState]}>
           <LinearGradient
-            colors={gradients.brand}
+            colors={gradients.nebula}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={localStyles.emptyIcon}
+            style={[localStyles.emptyIcon, elevation.glow]}
           >
             <Feather name="users" size={32} color="#FFFFFF" />
           </LinearGradient>
@@ -199,20 +216,25 @@ export const ConnectionsList: React.FC = () => {
             hands with shows up here.
           </Text>
         </View>
-      </SafeAreaView>
+      </ListBackground>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.screen, { backgroundColor: colors.surfaceBg }]}>
+    <ListBackground>
       <View style={styles.container}>
         {/* Header */}
         <View style={localStyles.header}>
           <Text style={[localStyles.headerTitle, { color: colors.textPrimary }]}>
             Connections
           </Text>
-          <View style={[localStyles.countPill, { backgroundColor: colors.surfaceInput }]}>
-            <Feather name="zap" size={12} color={colors.primary} />
+          <View
+            style={[
+              localStyles.countPill,
+              { backgroundColor: colors.glass, borderColor: colors.glassBorder },
+            ]}
+          >
+            <Feather name="target" size={12} color={colors.primary} />
             <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700' }]}>
               {connectionsWithProfiles.length} connected
             </Text>
@@ -254,7 +276,7 @@ export const ConnectionsList: React.FC = () => {
           contentContainerStyle={localStyles.listContent}
         />
       </View>
-    </SafeAreaView>
+    </ListBackground>
   );
 };
 
@@ -394,7 +416,7 @@ export const ConnectionDetail: React.FC<ConnectionDetailProps> = ({ connectionId
               pointerEvents="none"
             />
             <View style={localStyles.connectedBadge}>
-              <Feather name="zap" size={12} color="#FFFFFF" />
+              <Feather name="target" size={12} color="#FFFFFF" />
               <Text style={localStyles.connectedBadgeText}>Connected</Text>
             </View>
             <Text style={localStyles.heroName} numberOfLines={1}>
@@ -483,7 +505,7 @@ export const ConnectionDetail: React.FC<ConnectionDetailProps> = ({ connectionId
 
           {/* Prompts */}
           {profile.ask_me_about && (
-            <View style={localStyles.promptItem}>
+            <View style={[localStyles.promptItem, { borderBottomColor: colors.border }]}>
               <Text
                 style={[
                   typography.label,
@@ -504,7 +526,7 @@ export const ConnectionDetail: React.FC<ConnectionDetailProps> = ({ connectionId
           )}
 
           {profile.learning_about && (
-            <View style={localStyles.promptItem}>
+            <View style={[localStyles.promptItem, { borderBottomColor: colors.border }]}>
               <Text
                 style={[
                   typography.label,
@@ -525,7 +547,7 @@ export const ConnectionDetail: React.FC<ConnectionDetailProps> = ({ connectionId
           )}
 
           {profile.side_project && (
-            <View style={localStyles.promptItem}>
+            <View style={[localStyles.promptItem, { borderBottomColor: colors.border }]}>
               <Text
                 style={[
                   typography.label,
@@ -562,6 +584,7 @@ export const ConnectionDetail: React.FC<ConnectionDetailProps> = ({ connectionId
 };
 
 const localStyles = StyleSheet.create({
+  flex: { flex: 1 },
   centerContent: {
     flex: 1,
     justifyContent: 'center',
@@ -586,6 +609,7 @@ const localStyles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
     borderRadius: borderRadius.full,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   emptyState: {
     flex: 1,
@@ -673,6 +697,6 @@ const localStyles = StyleSheet.create({
     marginBottom: spacing.xl,
     paddingBottom: spacing.xl,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    // borderBottomColor is applied inline per-theme (colors.border).
   },
 });

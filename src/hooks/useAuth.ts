@@ -8,7 +8,7 @@ import * as WebBrowser from 'expo-web-browser';
 // Required so the auth popup can complete the flow on web. No-op on native.
 WebBrowser.maybeCompleteAuthSession();
 
-// Deep-link the provider redirects back to. Resolves to `zapfresh://` in a
+// Deep-link the provider redirects back to. Resolves to `orbit://` in a
 // dev/standalone build (the app.json scheme) and the Expo proxy in Expo Go.
 const oauthRedirectTo = makeRedirectUri();
 

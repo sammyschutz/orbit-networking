@@ -1,68 +1,92 @@
 import { StyleSheet, useColorScheme } from 'react-native';
 
 /**
- * Zap Design System - Color Tokens
- * Light and dark mode color mappings
+ * Orbit Design System — Color Tokens ("Deep-space nebula")
+ *
+ * Light = soft lavender daylight; Dark = cosmic indigo-black with nebula glow.
+ * Both modes share the indigo → violet → magenta brand DNA, accented by an
+ * aurora cyan and a starlight gold used sparingly for sparkle.
  */
 
 export const lightColors = {
   primary: '#6366F1',
   primaryDark: '#4F46E5',
   secondary: '#EC4899',
+  accent: '#0891B2',      // aurora cyan
+  accentStar: '#D97706',  // starlight gold
   success: '#10B981',
   error: '#EF4444',
   warning: '#F59E0B',
-  
-  surfaceBg: '#FFFFFF',
-  surfaceCard: '#F9FAFB',
-  surfaceInput: '#F3F4F6',
-  
-  textPrimary: '#111827',
-  textSecondary: '#6B7280',
-  textTertiary: '#9CA3AF',
-  
-  border: '#E5E7EB',
-  
+
+  surfaceBg: '#FBFAFF',     // faint lavender, not stark white
+  surfaceCard: '#FFFFFF',
+  surfaceInput: '#F3F1FB',
+
+  textPrimary: '#171327',   // ink with a violet tint
+  textSecondary: '#544E6E',
+  textTertiary: '#928DAE',
+
+  border: '#ECE8F7',
+
+  // Glassmorphic surfaces + colored glow
+  glass: 'rgba(255, 255, 255, 0.70)',
+  glassBorder: 'rgba(124, 58, 237, 0.12)',
+  glow: 'rgba(99, 102, 241, 0.30)',
+
   // Semantic overlays
-  scrim: 'rgba(0, 0, 0, 0.4)',
+  scrim: 'rgba(23, 19, 39, 0.4)',
 } as const;
 
 export const darkColors = {
   primary: '#818CF8',
   primaryDark: '#6366F1',
-  secondary: '#EC4899',
-  success: '#10B981',
-  error: '#EF4444',
-  warning: '#F59E0B',
-  
-  surfaceBg: '#0F172A',
-  surfaceCard: '#1E293B',
-  surfaceInput: '#334155',
-  
-  textPrimary: '#F1F5F9',
-  textSecondary: '#CBD5E1',
-  textTertiary: '#94A3B8',
-  
-  border: '#475569',
-  
+  secondary: '#F472B6',
+  accent: '#22D3EE',      // aurora cyan
+  accentStar: '#FBBF24',  // starlight gold
+  success: '#34D399',
+  error: '#F87171',
+  warning: '#FBBF24',
+
+  surfaceBg: '#0A0918',     // deep space
+  surfaceCard: '#16132B',   // nebula card
+  surfaceInput: '#211D3D',
+
+  textPrimary: '#F4F2FF',
+  textSecondary: '#B8B3D6',
+  textTertiary: '#807BA6',
+
+  border: 'rgba(255, 255, 255, 0.12)',
+
+  // Glassmorphic surfaces + colored glow
+  glass: 'rgba(255, 255, 255, 0.06)',
+  glassBorder: 'rgba(255, 255, 255, 0.12)',
+  glow: 'rgba(129, 140, 248, 0.45)',
+
   // Semantic overlays
-  scrim: 'rgba(0, 0, 0, 0.6)',
+  scrim: 'rgba(7, 6, 18, 0.7)',
 } as const;
 
 export type ColorScheme = Record<keyof typeof lightColors, string>;
 
 /**
- * Brand gradients (vibrant indigo → violet → pink direction).
- * Arrays are ready to drop into expo-linear-gradient `colors`.
+ * Brand & cosmic gradients. Arrays drop straight into expo-linear-gradient
+ * `colors`. `brand` is the signature indigo → violet → magenta nebula used on
+ * primary buttons; `nebula`/`aurora` are richer variants for hero moments.
  */
 export const gradients = {
   brand: ["#6366F1", "#8B5CF6", "#EC4899"] as const,
   brandSoft: ["#818CF8", "#C084FC"] as const,
+  nebula: ["#4F46E5", "#7C3AED", "#DB2777"] as const,
+  aurora: ["#22D3EE", "#6366F1", "#A855F7"] as const,
+  starlight: ["#FBBF24", "#F472B6"] as const,
   like: ["#10B981", "#34D399"] as const,
   nope: ["#F43F5E", "#FB7185"] as const,
   // Bottom-up scrim for legible text over photos.
-  photoScrim: ["transparent", "rgba(15,23,42,0.15)", "rgba(15,23,42,0.92)"] as const,
+  photoScrim: ["transparent", "rgba(10,9,24,0.15)", "rgba(10,9,24,0.92)"] as const,
   glow: ["#A78BFA", "#F0ABFC"] as const,
+  // Full-screen ambient backdrops (deep-space dark / lavender light).
+  cosmicBgDark: ["#0A0918", "#181140", "#0A0918"] as const,
+  cosmicBgLight: ["#FBFAFF", "#F1ECFF", "#FDF1FA"] as const,
 } as const;
 
 /**
@@ -97,6 +121,20 @@ export const useThemeColors = (): ColorScheme => {
 };
 
 /**
+ * True when the system is in dark mode. Prefer this over comparing color
+ * hex values when a screen needs to branch on the active scheme.
+ */
+export const useIsDark = (): boolean => useColorScheme() === 'dark';
+
+/**
+ * The full-screen ambient backdrop for the active scheme.
+ */
+export const screenBackground = (
+  isDark: boolean,
+): readonly [string, string, ...string[]] =>
+  isDark ? gradients.cosmicBgDark : gradients.cosmicBgLight;
+
+/**
  * Spacing tokens (4pt base unit)
  */
 export const spacing = {
@@ -109,23 +147,26 @@ export const spacing = {
 } as const;
 
 /**
- * Typography scale
+ * Typography scale (tight tracking on large text for a refined feel)
  */
 export const typography = {
   display: {
     fontSize: 32,
     fontWeight: '700' as const,
     lineHeight: 38,
+    letterSpacing: -0.5,
   },
   headline: {
     fontSize: 24,
     fontWeight: '700' as const,
     lineHeight: 32,
+    letterSpacing: -0.3,
   },
   title: {
     fontSize: 20,
     fontWeight: '600' as const,
     lineHeight: 28,
+    letterSpacing: -0.2,
   },
   body: {
     fontSize: 16,
@@ -152,6 +193,7 @@ export const borderRadius = {
   md: 12,
   lg: 16,
   xl: 20,
+  xxl: 28,
   full: 9999,
 } as const;
 
@@ -194,6 +236,14 @@ export const elevation = {
     shadowRadius: 24,
     elevation: 12,
   },
+  // Indigo accent glow for hero badges and primary CTAs.
+  glow: {
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.45,
+    shadowRadius: 20,
+    elevation: 10,
+  },
 } as const;
 
 /**
@@ -231,8 +281,10 @@ export const createStyles = (colors: ColorScheme) => StyleSheet.create({
   },
   card: {
     backgroundColor: colors.surfaceCard,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.xl,
     padding: spacing.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.glassBorder,
     ...elevation.md,
   },
   input: {

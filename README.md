@@ -1,4 +1,4 @@
-# Zap
+# Orbit
 
 A casual, swipe-based **networking** app for people who want to explore careers, meet professionals outside their field, and have low-pressure conversations — without the LinkedIn formality. Swipe through career snapshots, connect on mutual interest, and chat through a safety-first messaging layer.
 

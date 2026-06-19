@@ -1,16 +1,16 @@
+import { Avatar } from "@components/Avatar";
 import { Button } from "@components/Button";
 import { HandshakeOverlay } from "@components/HandshakeOverlay";
 import {
+    borderRadius,
     createStyles,
-    gradients,
     spacing,
     typography,
     useThemeColors,
 } from "@constants/theme";
+import { Feather } from "@expo/vector-icons";
 import { Interest, Profile, supabase } from "@services/supabase";
 import { useAppStore } from "@store/appStore";
-import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
@@ -222,51 +222,69 @@ export const PublicProfileDetail: React.FC<PublicProfileDetailProps> = ({
         contentContainerStyle={localStyles.content}
         showsVerticalScrollIndicator={false}
       >
-        <View style={localStyles.heroWrap}>
-          {profile.photo_url ? (
-            <Image
-              source={{ uri: profile.photo_url }}
-              style={StyleSheet.absoluteFill}
-              contentFit="cover"
-              transition={250}
-            />
-          ) : (
-            <LinearGradient
-              colors={gradients.brand}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={[StyleSheet.absoluteFill, localStyles.imagePlaceholder]}
+        {notificationId ? (
+          <View
+            style={[
+              localStyles.handBadge,
+              { backgroundColor: colors.secondary + "1A" },
+            ]}
+          >
+            <Text style={localStyles.handBadgeEmoji}>👋</Text>
+            <Text
+              style={[localStyles.handBadgeText, { color: colors.secondary }]}
             >
-              <Text style={localStyles.heroInitial}>
-                {profile.display_name.charAt(0).toUpperCase()}
-              </Text>
-            </LinearGradient>
-          )}
-          <LinearGradient
-            colors={gradients.photoScrim}
-            style={StyleSheet.absoluteFill}
-            pointerEvents="none"
-          />
-          {notificationId ? (
-            <View style={localStyles.interestBadge}>
-              <Text style={localStyles.interestBadgeEmoji}>👋</Text>
-              <Text style={localStyles.interestBadgeText}>
-                Extended a hand to you
-              </Text>
-            </View>
-          ) : null}
-          <View style={localStyles.heroInfo}>
-            <Text style={localStyles.heroName} numberOfLines={1}>
-              {profile.display_name}
-            </Text>
-            <Text style={localStyles.heroMeta} numberOfLines={1}>
-              {profile.role_title} · {profile.industry}
-            </Text>
-            <Text style={localStyles.heroSub}>
-              {formatExperience(profile.experience_level)}
+              Extended a hand to you
             </Text>
           </View>
+        ) : null}
+
+        <View style={localStyles.header}>
+          <Avatar
+            uri={profile.photo_url}
+            name={profile.display_name}
+            size={88}
+            radius={28}
+          />
+          <View style={localStyles.headerInfo}>
+            <Text
+              style={[localStyles.headerName, { color: colors.textPrimary }]}
+              numberOfLines={2}
+            >
+              {profile.display_name}
+            </Text>
+            <Text
+              style={[localStyles.headerTitle, { color: colors.textSecondary }]}
+              numberOfLines={2}
+            >
+              {profile.role_title}
+            </Text>
+            <View style={localStyles.metaRow}>
+              {profile.industry ? (
+                <Text
+                  style={[typography.caption, { color: colors.textTertiary }]}
+                  numberOfLines={1}
+                >
+                  {profile.industry}
+                </Text>
+              ) : null}
+              <View
+                style={[
+                  localStyles.expPill,
+                  { backgroundColor: colors.surfaceInput },
+                ]}
+              >
+                <Feather name="award" size={11} color={colors.textSecondary} />
+                <Text
+                  style={[localStyles.expPillText, { color: colors.textSecondary }]}
+                >
+                  {formatExperience(profile.experience_level)}
+                </Text>
+              </View>
+            </View>
+          </View>
         </View>
+
+        <View style={[localStyles.divider, { backgroundColor: colors.border }]} />
 
         <Text
           style={[
@@ -274,7 +292,6 @@ export const PublicProfileDetail: React.FC<PublicProfileDetailProps> = ({
             {
               color: colors.textPrimary,
               lineHeight: 24,
-              marginTop: spacing.xl,
             },
           ]}
         >
@@ -435,62 +452,61 @@ const localStyles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
   },
-  heroWrap: {
-    width: "100%",
-    aspectRatio: 3 / 4,
-    borderRadius: 28,
-    overflow: "hidden",
-    marginBottom: spacing.lg,
-  },
-  imagePlaceholder: {
+  header: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    gap: spacing.lg,
   },
-  heroInitial: {
-    color: "rgba(255,255,255,0.92)",
-    fontSize: 120,
-    fontWeight: "800",
+  headerInfo: {
+    flex: 1,
+    gap: 2,
   },
-  heroInfo: {
-    position: "absolute",
-    left: spacing.lg,
-    right: spacing.lg,
-    bottom: spacing.lg,
-  },
-  heroName: {
-    color: "#FFFFFF",
-    fontSize: 30,
+  headerName: {
+    fontSize: 26,
     fontWeight: "800",
     letterSpacing: -0.5,
   },
-  heroMeta: {
-    color: "rgba(255,255,255,0.92)",
-    fontSize: 15,
+  headerTitle: {
+    ...typography.body,
     fontWeight: "600",
-    marginTop: 2,
   },
-  heroSub: {
-    color: "rgba(255,255,255,0.75)",
-    fontSize: 13,
-    marginTop: 2,
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    marginTop: 4,
   },
-  interestBadge: {
-    position: "absolute",
-    top: spacing.lg,
-    left: spacing.lg,
+  expPill: {
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: borderRadius.full,
+  },
+  expPillText: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: spacing.lg,
+  },
+  handBadge: {
+    flexDirection: "row",
+    alignSelf: "flex-start",
+    alignItems: "center",
+    gap: 6,
     paddingHorizontal: spacing.md,
     paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: "rgba(236,72,153,0.92)",
+    borderRadius: borderRadius.full,
+    marginBottom: spacing.lg,
   },
-  interestBadgeEmoji: {
+  handBadgeEmoji: {
     fontSize: 13,
   },
-  interestBadgeText: {
-    color: "#FFFFFF",
+  handBadgeText: {
     fontSize: 12,
     fontWeight: "700",
   },
