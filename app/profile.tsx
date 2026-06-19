@@ -1,20 +1,29 @@
 import { Button } from "@components/Button";
+import {
+    AvatarHero,
+    ExperienceChips,
+    SectionCard,
+} from "@components/ProfileFormUI";
 import { TextInput } from "@components/TextInput";
 import {
+    borderRadius,
     createStyles,
     spacing,
     typography,
     useThemeColors,
 } from "@constants/theme";
+import { Feather } from "@expo/vector-icons";
 import { useAuth } from "@hooks/useAuth";
 import { Profile, supabase, SUPABASE_BUCKET } from "@services/supabase";
 import { useAppStore } from "@store/appStore";
+import { normalizeLinkedInUrl } from "@utils/linkedin";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
     Alert,
-    Image,
+    KeyboardAvoidingView,
+    Platform,
     Pressable,
     SafeAreaView,
     ScrollView,
@@ -22,14 +31,6 @@ import {
     Text,
     View,
 } from "react-native";
-
-const EXPERIENCE_LEVELS = [
-  "student",
-  "early",
-  "mid",
-  "senior",
-  "founder",
-] as const;
 
 export default function ProfileScreen() {
   const colors = useThemeColors();
@@ -48,6 +49,7 @@ export default function ProfileScreen() {
   const [askMeAbout, setAskMeAbout] = useState("");
   const [learningAbout, setLearningAbout] = useState("");
   const [sideProject, setSideProject] = useState("");
+  const [linkedinUrl, setLinkedinUrl] = useState("");
   const [imageError, setImageError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +65,7 @@ export default function ProfileScreen() {
     setAskMeAbout(currentProfile.ask_me_about ?? "");
     setLearningAbout(currentProfile.learning_about ?? "");
     setSideProject(currentProfile.side_project ?? "");
+    setLinkedinUrl(currentProfile.linkedin_url ?? "");
     setImageError(false);
   }, [currentProfile]);
 
@@ -185,8 +188,17 @@ export default function ProfileScreen() {
       setError("Please fill out your name, role, industry, and bio.");
       return;
     }
-    if (!photoUri) {
-      setError("Please upload a profile photo.");
+
+    // LinkedIn is optional, but if provided it must be a valid profile URL so
+    // the "Connect on LinkedIn" button can never open a broken link.
+    const trimmedLinkedin = linkedinUrl.trim();
+    const normalizedLinkedin = trimmedLinkedin
+      ? normalizeLinkedInUrl(trimmedLinkedin)
+      : null;
+    if (trimmedLinkedin && !normalizedLinkedin) {
+      setError(
+        "Enter a valid LinkedIn profile URL, e.g. linkedin.com/in/your-name",
+      );
       return;
     }
 
@@ -205,10 +217,12 @@ export default function ProfileScreen() {
         industry: industry.trim(),
         experience_level: experienceLevel,
         bio: bio.trim(),
-        photo_url: savedPhotoUrl,
+        // Optional — stored as "" when skipped (the column is NOT NULL).
+        photo_url: savedPhotoUrl ?? "",
         ask_me_about: askMeAbout.trim() || null,
         learning_about: learningAbout.trim() || null,
         side_project: sideProject.trim() || null,
+        linkedin_url: normalizedLinkedin,
         is_complete: true,
       });
 
@@ -255,180 +269,174 @@ export default function ProfileScreen() {
     );
   }
 
-  return (
-    <SafeAreaView
-      style={[styles.screen, { backgroundColor: colors.surfaceBg }]}
-    >
-      <ScrollView
-        contentContainerStyle={localStyles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        <Text
-          style={[
-            typography.headline,
-            { color: colors.textPrimary, marginBottom: spacing.lg },
-          ]}
-        >
-          Edit profile
-        </Text>
+  const initial = (displayName.trim().charAt(0) || "?").toUpperCase();
+  const metaPreview = [roleTitle.trim(), industry.trim()]
+    .filter(Boolean)
+    .join(" · ");
 
-        <Text
-          style={[
-            typography.label,
-            { color: colors.textSecondary, marginBottom: spacing.sm },
-          ]}
+  return (
+    <SafeAreaView style={[styles.screen, { backgroundColor: colors.surfaceBg }]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={localStyles.flex1}
+      >
+        <ScrollView
+          contentContainerStyle={localStyles.content}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          Profile photo
-        </Text>
-        <Pressable
-          style={[localStyles.photoContainer, { borderColor: colors.border }]}
-          onPress={handlePickImage}
-          accessibilityLabel="Change profile photo"
-          accessibilityRole="button"
-        >
-          {resolvedPhotoUri ? (
-            <Image
-              source={{ uri: resolvedPhotoUri }}
-              style={localStyles.photo}
-              resizeMode="cover"
-              onError={() => setImageError(true)}
+          {/* Gradient hero with the tappable avatar + a live identity preview */}
+          <AvatarHero
+            colors={colors}
+            uri={resolvedPhotoUri}
+            initial={initial}
+            name={displayName.trim() || "Your name"}
+            meta={metaPreview || "Add your role & industry"}
+            hint={photoUri ? "Tap the photo to change it" : "Tap to add a photo"}
+            onPress={handlePickImage}
+            onImageError={() => setImageError(true)}
+          />
+
+          {photoUri ? (
+            <Pressable
+              onPress={() => {
+                setPhotoUri(null);
+                setImageError(false);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Remove profile photo"
+              style={localStyles.removePhoto}
+              hitSlop={8}
+            >
+              <Feather name="trash-2" size={14} color={colors.textSecondary} />
+              <Text style={[typography.label, { color: colors.textSecondary }]}>
+                Remove photo
+              </Text>
+            </Pressable>
+          ) : null}
+
+          {/* Basics */}
+          <SectionCard colors={colors} icon="user" title="The basics">
+            <TextInput
+              label="Name"
+              placeholder="Your name"
+              value={displayName}
+              onChangeText={setDisplayName}
             />
-          ) : (
-            <View style={localStyles.photoPlaceholder}>
+            <TextInput
+              label="Role / title"
+              placeholder="Product designer, engineer, etc."
+              value={roleTitle}
+              onChangeText={setRoleTitle}
+            />
+            <TextInput
+              label="Industry"
+              placeholder="Design, finance, healthcare"
+              value={industry}
+              onChangeText={setIndustry}
+            />
+
+            <Text style={[localStyles.fieldLabel, { color: colors.textPrimary }]}>
+              Experience level
+            </Text>
+            <ExperienceChips
+              colors={colors}
+              value={experienceLevel}
+              onChange={setExperienceLevel}
+            />
+          </SectionCard>
+
+          {/* About */}
+          <SectionCard
+            colors={colors}
+            icon="edit-3"
+            title="About you"
+            subtitle="A quick snapshot people see first"
+          >
+            <TextInput
+              placeholder="Share a quick career snapshot"
+              value={bio}
+              onChangeText={setBio}
+              multiline
+            />
+          </SectionCard>
+
+          {/* Conversation starters */}
+          <SectionCard
+            colors={colors}
+            icon="message-circle"
+            title="Conversation starters"
+            subtitle="Optional — give people an easy way in"
+          >
+            <TextInput
+              label="Ask me about"
+              placeholder="e.g. career transitions, building habits"
+              value={askMeAbout}
+              onChangeText={setAskMeAbout}
+            />
+            <TextInput
+              label="I’m learning about"
+              placeholder="e.g. product strategy, frontend"
+              value={learningAbout}
+              onChangeText={setLearningAbout}
+            />
+            <TextInput
+              label="My side project"
+              placeholder="Tell people what you're working on"
+              value={sideProject}
+              onChangeText={setSideProject}
+            />
+            <TextInput
+              label="LinkedIn profile"
+              placeholder="linkedin.com/in/your-name"
+              helper="Shown as a Connect button once you're connected"
+              value={linkedinUrl}
+              onChangeText={setLinkedinUrl}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </SectionCard>
+
+          {error ? (
+            <View
+              style={[
+                localStyles.errorBanner,
+                { backgroundColor: colors.error + "14", borderColor: colors.error },
+              ]}
+            >
+              <Feather name="alert-circle" size={16} color={colors.error} />
               <Text
-                style={[
-                  typography.body,
-                  { color: colors.textSecondary, textAlign: "center" },
-                ]}
+                style={[typography.caption, localStyles.flex1, { color: colors.error }]}
               >
-                Tap to add a photo
+                {error}
               </Text>
             </View>
-          )}
-        </Pressable>
-        <Text
-          style={[
-            typography.caption,
-            { color: colors.textSecondary, marginBottom: spacing.lg },
-          ]}
-        >
-          Tap the photo to choose a new image from your library.
-        </Text>
+          ) : null}
 
-        <TextInput
-          label="Name"
-          placeholder="Your name"
-          value={displayName}
-          onChangeText={setDisplayName}
-        />
-        <TextInput
-          label="Role / title"
-          placeholder="Product designer, engineer, etc."
-          value={roleTitle}
-          onChangeText={setRoleTitle}
-        />
-        <TextInput
-          label="Industry"
-          placeholder="Design, finance, healthcare"
-          value={industry}
-          onChangeText={setIndustry}
-        />
-
-        <View style={localStyles.row}>
-          {EXPERIENCE_LEVELS.map((level, index) => {
-            const isSelected = experienceLevel === level;
-            return (
-              <Pressable
-                key={level}
-                style={[
-                  localStyles.chip,
-                  index !== EXPERIENCE_LEVELS.length - 1 &&
-                    localStyles.chipSpacing,
-                  {
-                    backgroundColor: isSelected
-                      ? colors.primary
-                      : colors.surfaceInput,
-                    borderColor: isSelected ? colors.primary : colors.border,
-                  },
-                ]}
-                onPress={() => setExperienceLevel(level)}
-                accessibilityRole="button"
-                accessibilityLabel={`Select ${level} experience level`}
-              >
-                <Text
-                  style={{
-                    ...typography.caption,
-                    color: isSelected ? "#ffffff" : colors.textPrimary,
-                  }}
-                >
-                  {level}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        <TextInput
-          label="Bio"
-          placeholder="Share a quick career snapshot"
-          value={bio}
-          onChangeText={setBio}
-          multiline
-        />
-
-        <TextInput
-          label="Ask me about"
-          placeholder="e.g. career transitions, building habits"
-          value={askMeAbout}
-          onChangeText={setAskMeAbout}
-        />
-
-        <TextInput
-          label="I’m learning about"
-          placeholder="e.g. product strategy, frontend"
-          value={learningAbout}
-          onChangeText={setLearningAbout}
-        />
-
-        <TextInput
-          label="My side project"
-          placeholder="Tell people what you're working on"
-          value={sideProject}
-          onChangeText={setSideProject}
-        />
-
-        {error ? (
-          <Text style={[typography.caption, { color: colors.error, marginTop: spacing.sm }]}>
-            {error}
-          </Text>
-        ) : null}
-
-        <View style={localStyles.buttonGroup}>
-          <View style={localStyles.actionItem}>
-            <Button
-              title="Save changes"
-              loading={saving}
-              onPress={handleSave}
-            />
-          </View>
-          <View style={localStyles.actionItem}>
-            <Button
-              title="Cancel"
-              variant="secondary"
+          <View style={localStyles.buttonGroup}>
+            <Button title="Save changes" loading={saving} onPress={handleSave} />
+            <Pressable
               onPress={() => router.back()}
               disabled={saving}
-            />
+              accessibilityRole="button"
+              style={localStyles.cancelButton}
+            >
+              <Text style={[localStyles.cancelText, { color: colors.textSecondary }]}>
+                Cancel
+              </Text>
+            </Pressable>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const localStyles = StyleSheet.create({
+  flex1: { flex: 1 },
   content: {
     padding: spacing.lg,
-    paddingBottom: spacing.xl,
+    paddingBottom: spacing.xxl,
   },
   centered: {
     flex: 1,
@@ -436,47 +444,38 @@ const localStyles = StyleSheet.create({
     alignItems: "center",
     padding: spacing.lg,
   },
-  photoContainer: {
-    width: 140,
-    height: 140,
-    borderRadius: 18,
-    borderWidth: 1,
-    overflow: "hidden",
-    marginBottom: spacing.sm,
-    justifyContent: "center",
-    alignItems: "center",
+  fieldLabel: {
+    ...typography.label,
+    marginBottom: spacing.md,
   },
-  photo: {
-    width: "100%",
-    height: "100%",
-    backgroundColor: "#f0f0f0",
-  },
-  photoPlaceholder: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: spacing.md,
-  },
-  row: {
+  removePhoto: {
     flexDirection: "row",
-    flexWrap: "wrap",
+    alignItems: "center",
+    alignSelf: "center",
+    gap: 6,
+    marginTop: -spacing.sm,
+    marginBottom: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
     marginBottom: spacing.lg,
   },
-  chip: {
-    borderWidth: 1,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: 999,
-  },
-  chipSpacing: {
-    marginRight: spacing.sm,
-    marginBottom: spacing.sm,
-  },
   buttonGroup: {
-    marginTop: spacing.lg,
-    flexDirection: "column",
+    marginTop: spacing.sm,
+    gap: spacing.sm,
   },
-  actionItem: {
-    marginBottom: spacing.md,
+  cancelButton: {
+    alignItems: "center",
+    paddingVertical: spacing.md,
+  },
+  cancelText: {
+    ...typography.label,
+    fontSize: 15,
   },
 });

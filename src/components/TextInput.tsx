@@ -174,7 +174,11 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   input: {
-    ...typography.body,
+    // Intentionally not spreading typography.body: its lineHeight (24) clips
+    // descenders (g, p, y, @) at the bottom of a single-line TextInput. Let the
+    // font set its own line height instead.
+    fontSize: typography.body.fontSize,
+    fontWeight: typography.body.fontWeight,
     borderWidth: 1,
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.md,

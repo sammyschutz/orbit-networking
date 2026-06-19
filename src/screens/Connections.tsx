@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import {
   View,
   ScrollView,
@@ -9,6 +9,7 @@ import {
   Pressable,
   ActivityIndicator,
   RefreshControl,
+  Linking,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -26,7 +27,8 @@ import { Button } from '@components/Button';
 import { SafetyMenu } from '@components/SafetyMenu';
 import { useAppStore } from '@store/appStore';
 import { supabase, getOtherUserId, Connection, Profile } from '@services/supabase';
-import { useNavigation, useRouter } from 'expo-router';
+import { normalizeLinkedInUrl } from '@utils/linkedin';
+import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 
 interface ConnectionWithProfile extends Connection {
   profile?: Profile;
@@ -47,18 +49,21 @@ export const ConnectionsList: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Fetch connections and their profiles on mount
-  useEffect(() => {
-    if (currentProfile?.user_id) {
-      loadConnections();
-    }
-  }, [currentProfile?.user_id]);
+  // Refresh on focus, not just mount — expo-router keeps tab screens mounted,
+  // so a handshake completed elsewhere must show up when returning here.
+  useFocusEffect(
+    useCallback(() => {
+      if (currentProfile?.user_id) {
+        loadConnections();
+      }
+    }, [currentProfile?.user_id]),
+  );
 
   const loadConnections = async () => {
     setLoading(true);
     try {
       const freshConnections = await fetchConnections();
-      
+
       if (!freshConnections.length || !currentProfile?.user_id) {
         setConnectionsWithProfiles([]);
         return;
@@ -190,7 +195,8 @@ export const ConnectionsList: React.FC = () => {
               },
             ]}
           >
-            Start swiping and matching with professionals to build your network.
+            Extend a hand to people you'd like to meet — everyone you shake
+            hands with shows up here.
           </Text>
         </View>
       </SafeAreaView>
@@ -231,7 +237,7 @@ export const ConnectionsList: React.FC = () => {
                 name={item.profile?.display_name ?? 'Unknown'}
                 title={item.profile?.role_title ?? ''}
                 industry={item.profile?.industry ?? ''}
-                matchedDate={`Matched ${formatMatchDate(item.created_at)}`}
+                matchedDate={`Shook hands ${formatMatchDate(item.created_at).toLowerCase()}`}
                 isNew={isNewConnection(item.created_at)}
                 testID={`connection-${item.id}`}
               />
@@ -358,7 +364,7 @@ export const ConnectionDetail: React.FC<ConnectionDetailProps> = ({ connectionId
 
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: colors.surfaceBg }]}>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView contentContainerStyle={localStyles.scrollContent}>
         {/* Close button would be in header navigation */}
         <View style={localStyles.profileDetail}>
           {/* Profile image with name overlay */}
@@ -441,6 +447,25 @@ export const ConnectionDetail: React.FC<ConnectionDetailProps> = ({ connectionId
               style={{ marginBottom: spacing.lg }}
             />
           ) : null}
+
+          {/* Connect on LinkedIn — only when the other user has a valid, stored
+              LinkedIn URL. Re-normalized here so a bad row can never open. */}
+          {(() => {
+            const linkedinUrl = normalizeLinkedInUrl(profile.linkedin_url);
+            if (!linkedinUrl) return null;
+            return (
+              <Button
+                title="Connect on LinkedIn"
+                variant="secondary"
+                onPress={() => {
+                  Linking.openURL(linkedinUrl).catch(() => {
+                    /* https links always have a handler; ignore rare failures */
+                  });
+                }}
+                style={{ marginBottom: spacing.lg }}
+              />
+            );
+          })()}
 
           {/* Bio */}
           <Text
@@ -577,6 +602,15 @@ const localStyles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: spacing.xl,
+  },
+  // NB: the ScrollView content container must NOT use `flex: 1` (the shared
+  // styles.container) — that pins content to the viewport height and stops
+  // the ScrollView from scrolling, so a tall profile snaps back to the top.
+  // flexGrow keeps short profiles filling the screen without breaking scroll.
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xxl,
   },
   profileDetail: {
     paddingVertical: spacing.lg,

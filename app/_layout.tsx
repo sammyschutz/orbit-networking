@@ -35,16 +35,35 @@ export default function RootLayout() {
       }
     };
 
+    // Supabase fires onAuthStateChange for many events that don't change *who*
+    // is signed in — token refreshes, user-metadata updates, and repeat
+    // SIGNED_IN events on app foreground. Re-running navigation on those does a
+    // router.replace that remounts the current screen and wipes in-progress
+    // input (a half-finished onboarding form, a typed-but-unsubmitted signup).
+    // So we ignore the non-transition events and only navigate when the active
+    // user id actually changes.
+    let lastUserId: string | null | undefined = undefined;
+
+    const handleAuthChange = (event: string, session: any) => {
+      if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") return;
+
+      const userId = session?.user?.id ?? null;
+      if (userId === lastUserId) return; // same user, or still signed out
+      lastUserId = userId;
+
+      navigateForSession(session);
+    };
+
     // Listen for auth state changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      await navigateForSession(session);
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      handleAuthChange(event, session);
     });
 
-    // Initial session check on mount
+    // Initial session check on mount (in case INITIAL_SESSION isn't delivered).
     supabase.auth.getSession().then(({ data: { session } }) => {
-      navigateForSession(session);
+      handleAuthChange("INITIAL_SESSION", session);
     });
 
     return () => subscription.unsubscribe();
@@ -59,6 +78,7 @@ export default function RootLayout() {
         <Stack.Screen name="auth" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         <Stack.Screen name="profile" options={{ title: "Edit profile" }} />
+        <Stack.Screen name="my-algorithm" options={{ title: "My algorithm" }} />
         <Stack.Screen name="connection/[id]" options={{ title: "Connection" }} />
         <Stack.Screen name="chat/[id]" options={{ title: "Chat" }} />
         <Stack.Screen

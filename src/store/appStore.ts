@@ -1,9 +1,12 @@
 import {
+    City,
     Connection,
     Conversation,
-    getOtherUserId,
+    DiscoverySettings,
+    Interest,
     invokeEdgeFunction,
     isConversationUnread,
+    MAX_INTERESTS,
     Message,
     Notification,
     Profile,
@@ -57,6 +60,14 @@ interface AppState {
   conversationsLoading: boolean;
   messagesByConversation: Record<string, Message[]>;
 
+  // "My algorithm" tuning (interests + locality). `interests` is the full
+  // chip vocabulary (curated + the user's own custom tags).
+  interests: Interest[];
+  myInterestIds: string[];
+  myCity: City | null;
+  discoverySettings: DiscoverySettings | null;
+  algorithmLoading: boolean;
+
   // Actions
   fetchCurrentProfile: (userId: string) => Promise<Profile | null>;
   updateProfile: (updates: Partial<Profile>) => Promise<void>;
@@ -91,14 +102,30 @@ interface AppState {
   }) => Promise<boolean>;
   removeConnection: (connectionId: string) => Promise<boolean>;
 
+  // "My algorithm" actions. Every edit persists immediately (implicit save)
+  // and clears the cached candidate queue so the next Discover visit
+  // refetches with the new tuning.
+  fetchAlgorithm: () => Promise<void>;
+  toggleInterest: (interest: Interest) => Promise<boolean>;
+  addCustomInterest: (
+    name: string,
+  ) => Promise<{ ok: boolean; reason?: "length" | "charset" | "cap" | "error" }>;
+  setCity: (city: City | null) => Promise<void>;
+  updateDiscoverySettings: (
+    patch: Partial<Pick<DiscoverySettings, "nearby_only" | "nearby_radius_miles">>,
+  ) => Promise<void>;
+
   clearError: () => void;
 }
 
-// Approximate the 6-month discovery cooldown window (spec §13.3).
-const SIX_MONTHS_AGO = () => {
-  const d = new Date();
-  d.setMonth(d.getMonth() - 6);
-  return d.getTime();
+// The authenticated user id; falls back to the session when the profile row
+// doesn't exist yet (onboarding).
+const getSessionUserId = async (
+  currentProfile: Profile | null,
+): Promise<string | null> => {
+  if (currentProfile?.user_id) return currentProfile.user_id;
+  const { data } = await supabase.auth.getSession();
+  return data.session?.user?.id ?? null;
 };
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -115,6 +142,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   conversations: [],
   conversationsLoading: false,
   messagesByConversation: {},
+  interests: [],
+  myInterestIds: [],
+  myCity: null,
+  discoverySettings: null,
+  algorithmLoading: false,
 
   // Fetch current user's profile
   fetchCurrentProfile: async (userId: string) => {
@@ -192,61 +224,26 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  // Fetch discovery candidates (profiles not swiped on)
+  // Fetch discovery candidates, ranked and filtered server-side by the
+  // user's algorithm (interests overlap + locality, spec §6). The RPC also
+  // owns the §13.3 pass-expiry semantics and excludes blocked users.
   fetchCandidates: async () => {
     const { currentProfile } = get();
     if (!currentProfile?.user_id) return [];
 
     set({ candidatesLoading: true });
     try {
-      // Get list of users already swiped on, with direction + recency so passes
-      // expire after 6 months (spec §13.3): exclude all `like` swipes
-      // permanently, but only `pass` swipes from the last 6 months.
-      const { data: swipes } = await supabase
-        .from("swipes")
-        .select("to_user_id, direction, created_at")
-        .eq("from_user_id", currentProfile.user_id);
-
-      const cutoff = SIX_MONTHS_AGO();
-      const swipedUserIds = (swipes ?? [])
-        .filter(
-          (s) =>
-            s.direction === "like" ||
-            (s.direction === "pass" &&
-              new Date(s.created_at).getTime() > cutoff),
-        )
-        .map((s) => s.to_user_id);
-
-      // Get list of connected users
-      const { data: connections } = await supabase
-        .from("connections")
-        .select("user_a_id, user_b_id")
-        .or(
-          `user_a_id.eq.${currentProfile.user_id},user_b_id.eq.${currentProfile.user_id}`,
-        );
-
-      const connectedUserIds =
-        connections?.map((c) => getOtherUserId(c, currentProfile.user_id)) ??
-        [];
-
-      // Exclude current user, swiped, and connected
-      const excludeIds = [
-        currentProfile.user_id,
-        ...swipedUserIds,
-        ...connectedUserIds,
-      ];
-
-      // Fetch candidates
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("is_complete", true)
-        .not("user_id", "in", `(${excludeIds.join(",")})`)
-        .order("created_at", { ascending: false })
-        .limit(20);
+      const { data, error } = await supabase.rpc("get_discover_candidates", {
+        p_limit: 20,
+      });
 
       if (error) throw error;
-      const candidates = (data as Profile[]) ?? [];
+      const candidates = (((data as any[]) ?? []).map((row) => ({
+        ...row,
+        // numeric can arrive as a string depending on the serializer
+        distance_miles:
+          row.distance_miles == null ? null : Number(row.distance_miles),
+      })) as Profile[]);
       set({ candidates });
       return candidates;
     } catch (err) {
@@ -534,6 +531,182 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
     await Promise.all([get().fetchConnections(), get().fetchConversations()]);
     return true;
+  },
+
+  // --- "My algorithm" (zap-discover-algorithm-spec.md §3) --------------------
+
+  // Load the chip vocabulary (curated + own custom tags), the user's
+  // selections, their city, and their discovery settings.
+  fetchAlgorithm: async () => {
+    const userId = await getSessionUserId(get().currentProfile);
+    if (!userId) return;
+
+    set({ algorithmLoading: true });
+    try {
+      const [curatedRes, mineRes, settingsRes] = await Promise.all([
+        supabase.from("interests").select("*").eq("curated", true).order("name"),
+        supabase
+          .from("user_interests")
+          .select("interest_id, interests(*)")
+          .eq("user_id", userId),
+        supabase
+          .from("discovery_settings")
+          .select("*")
+          .eq("user_id", userId)
+          .maybeSingle(),
+      ]);
+
+      const cityId = get().currentProfile?.city_id;
+      let myCity: City | null = null;
+      if (cityId) {
+        const { data } = await supabase
+          .from("cities")
+          .select("*")
+          .eq("id", cityId)
+          .maybeSingle();
+        myCity = (data as City | null) ?? null;
+      }
+
+      const curated = (curatedRes.data as Interest[]) ?? [];
+      const mineRows = (mineRes.data as any[]) ?? [];
+      const myInterestIds = mineRows.map((r) => r.interest_id as string);
+      // Custom tags the user picked aren't in the curated list — append them
+      // so their chips render selected instead of disappearing.
+      const interests = [...curated];
+      for (const row of mineRows) {
+        const interest = row.interests as Interest | null;
+        if (interest && !interests.some((i) => i.id === interest.id)) {
+          interests.push(interest);
+        }
+      }
+
+      set({
+        interests,
+        myInterestIds,
+        myCity,
+        discoverySettings: (settingsRes.data as DiscoverySettings | null) ?? null,
+      });
+    } catch (err) {
+      console.error("Failed to load algorithm settings:", err);
+    } finally {
+      set({ algorithmLoading: false });
+    }
+  },
+
+  // Select/deselect an interest chip. Returns false when the cap blocks it.
+  toggleInterest: async (interest: Interest) => {
+    const userId = await getSessionUserId(get().currentProfile);
+    if (!userId) return false;
+
+    const { myInterestIds } = get();
+    const selected = myInterestIds.includes(interest.id);
+
+    if (!selected && myInterestIds.length >= MAX_INTERESTS) return false;
+
+    // Optimistic flip; revert on failure.
+    set({
+      myInterestIds: selected
+        ? myInterestIds.filter((id) => id !== interest.id)
+        : [...myInterestIds, interest.id],
+      candidates: [],
+    });
+
+    const { error } = selected
+      ? await supabase
+          .from("user_interests")
+          .delete()
+          .eq("user_id", userId)
+          .eq("interest_id", interest.id)
+      : await supabase
+          .from("user_interests")
+          .insert({ user_id: userId, interest_id: interest.id });
+
+    if (error) {
+      console.error("Failed to update interest:", error);
+      set({ myInterestIds });
+      return false;
+    }
+    return true;
+  },
+
+  // Create (or find) a free-form tag via the RPC, then select it.
+  addCustomInterest: async (name: string) => {
+    const { data, error } = await supabase.rpc("add_custom_interest", {
+      p_name: name,
+    });
+
+    if (error) {
+      const message = error.message ?? "";
+      if (message.includes("interest_name_length")) return { ok: false, reason: "length" as const };
+      if (message.includes("interest_name_charset")) return { ok: false, reason: "charset" as const };
+      console.error("add_custom_interest failed:", error);
+      return { ok: false, reason: "error" as const };
+    }
+
+    const interestId = data as string;
+    const { interests, myInterestIds } = get();
+
+    if (myInterestIds.includes(interestId)) return { ok: true };
+    if (myInterestIds.length >= MAX_INTERESTS) return { ok: false, reason: "cap" as const };
+
+    let interest = interests.find((i) => i.id === interestId);
+    if (!interest) {
+      const { data: row } = await supabase
+        .from("interests")
+        .select("*")
+        .eq("id", interestId)
+        .maybeSingle();
+      interest = (row as Interest | null) ?? undefined;
+      if (interest) set({ interests: [...get().interests, interest] });
+    }
+    if (!interest) return { ok: false, reason: "error" as const };
+
+    const ok = await get().toggleInterest(interest);
+    return ok ? { ok: true } : { ok: false, reason: "error" as const };
+  },
+
+  // Set (or clear) the self-reported city on the profile.
+  setCity: async (city: City | null) => {
+    try {
+      await get().updateProfile({ city_id: city?.id ?? null });
+      set({ myCity: city, candidates: [] });
+      // "Nearby only" is meaningless without a city — switch it off with it.
+      if (!city && get().discoverySettings?.nearby_only) {
+        await get().updateDiscoverySettings({ nearby_only: false });
+      }
+    } catch (err) {
+      console.error("Failed to set city:", err);
+    }
+  },
+
+  updateDiscoverySettings: async (patch) => {
+    const userId = await getSessionUserId(get().currentProfile);
+    if (!userId) return;
+
+    const current = get().discoverySettings;
+    const next: DiscoverySettings = {
+      user_id: userId,
+      nearby_only: current?.nearby_only ?? false,
+      nearby_radius_miles: current?.nearby_radius_miles ?? 25,
+      ...patch,
+    };
+
+    // Optimistic; revert on failure.
+    set({ discoverySettings: next, candidates: [] });
+
+    const { error } = await supabase.from("discovery_settings").upsert(
+      {
+        user_id: next.user_id,
+        nearby_only: next.nearby_only,
+        nearby_radius_miles: next.nearby_radius_miles,
+      },
+      { onConflict: "user_id" },
+    );
+
+    if (error) {
+      console.error("Failed to update discovery settings:", error);
+      set({ discoverySettings: current ?? null });
+    }
   },
 
   // Clear error

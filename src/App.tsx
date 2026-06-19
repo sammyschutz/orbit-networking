@@ -2,7 +2,7 @@ import { Button } from "@components/Button";
 import { useAuth } from "@hooks/useAuth";
 import { LoginScreen, SignUpScreen } from "@screens/AuthScreens";
 import { ConnectionsList } from "@screens/Connections";
-import { DiscoverySwipeDeck } from "@screens/DiscoveryDeck";
+import { DiscoveryIntro } from "@screens/DiscoveryIntro";
 import { ProfileOnboarding } from "@screens/ProfileOnboarding";
 import { useAppStore } from "@store/appStore";
 import React, { useEffect, useState } from "react";
@@ -98,7 +98,7 @@ const MainApp: React.FC = () => {
         />
       </View>
 
-      {activeTab === "discovery" && <DiscoverySwipeDeck />}
+      {activeTab === "discovery" && <DiscoveryIntro />}
       {activeTab === "connections" && <ConnectionsList />}
       {/* Profile tab would be implemented similarly */}
 
